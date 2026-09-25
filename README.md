@@ -36,6 +36,13 @@
 - **Decks that make sense.** All photos (newest first), Shuffle, On this day, Screenshots, Videos, and one deck per month with its own progress.
 - **Videos play on the card.** They autoplay muted, and the next video preloads. Controls: a seek bar, double-tap either side to jump ±10 s, and long-press for 4× speed. A full-screen player continues from the same spot.
 - **A safety net.** Swiping left only moves an item to the review bin. In the bin, tap anything to rescue it, then delete the rest in one go. Deleted items go to *Recently Deleted* on iOS, or the system trash on Android 11+, for 30 days.
+- **Storage cleanup (Android).** Scans shared storage for:
+  - **Junk:** leftovers from Android's trash (hidden `.trashed-…` files that still use space), APK installers, temp and log files, half-finished downloads, and thumbnail caches.
+  - **Empty folders.**
+  - **Large files** over 50 MB, biggest first.
+  - **Documents** (PDF, Office, text, ebooks). Tap one to open it in another app and review it.
+
+  **Clean junk** clears junk and empty folders in one go. Large files and documents are picked one by one. These deletions are permanent, and the confirmation says so.
 - **Progress you can see.** The home screen shows how much of the library you've reviewed, space freed and items deleted, and remembers where you left off.
 - **Private by design.** Photos never leave the device. The app makes no network requests, has no analytics and needs no account. The only links, to the developer's profiles on the About screen, open in your browser.
 - **Polished details.** Follows the system light or dark mode, uses the bundled Plus Jakarta Sans font, and has haptics throughout.
@@ -58,6 +65,13 @@ The app needs access to the photo library:
 | iOS | Photo library read/write (`NSPhotoLibraryUsageDescription`). Limited access works; the home screen offers **Add more**. |
 | Android 13+ | `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`, `READ_MEDIA_VISUAL_USER_SELECTED` |
 | Android ≤ 12 | `READ_EXTERNAL_STORAGE` (and `WRITE_EXTERNAL_STORAGE` on ≤ 10) |
+| Android 11+, storage cleanup only | `MANAGE_EXTERNAL_STORAGE` ("All files access"), asked for only when you open Storage cleanup |
+
+Storage cleanup is Android-only. iOS gives apps no access to files outside their own sandbox and the photo library.
+
+It never looks inside `Android/` (other apps' private data, which Android 11+ blocks anyway), and it never deletes the standard folders (DCIM, Download, Music, …) or system marker files such as `.nomedia`.
+
+> **Play Store note:** Google Play only allows `MANAGE_EXTERNAL_STORAGE` for certain app types (file managers, backup, antivirus, document management) and asks you to justify it. A gallery cleaner may be refused. If that happens, ship the Play build without storage cleanup; sideloaded APKs are unaffected.
 
 > **Simulator note:** on iOS 26 simulators, `xcrun simctl privacy … grant photos` does not satisfy PhotoKit. Tap **Allow Full Access** in the system dialog instead. Android emulators accept `adb shell pm grant`.
 
@@ -68,11 +82,13 @@ lib/
 ├── main.dart, app.dart          app setup, theme, and which screen to show first
 ├── data/
 │   ├── gallery_repository.dart  photo_manager wrapper: permission, loading, sizes, delete/trash
-│   └── decision_store.dart      keep/delete decisions and stats in shared_preferences
+│   ├── decision_store.dart      keep/delete decisions and stats in shared_preferences
+│   └── storage_scanner.dart     junk / empty-folder / large-file / document scan and delete (isolate)
 ├── state/
-│   └── app_controller.dart      library, decks, bin, and stats (ChangeNotifier)
+│   ├── app_controller.dart      library, decks, bin, and stats (ChangeNotifier)
+│   └── storage_cleaner.dart     all-files access, scan state, deletion
 ├── ui/
-│   ├── screens/                 onboarding, home, swipe, review bin, full-screen viewer
+│   ├── screens/                 onboarding, home, swipe, review bin, viewer, storage cleanup
 │   └── widgets/
 │       ├── swipe_deck.dart      card physics, stamps, fling, spring-back, undo
 │       ├── asset_card.dart      photo/video card with date, type and size

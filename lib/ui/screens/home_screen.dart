@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import '../../models/deck.dart';
 import '../../state/app_controller.dart';
 import '../../state/app_scope.dart';
+import '../../state/storage_cleaner.dart';
 import '../../theme/app_theme.dart';
 import '../../util/format.dart';
 import '../widgets/about_sheet.dart';
 import '../widgets/common.dart';
 import '../widgets/deck_actions.dart';
 import 'review_screen.dart';
+import 'storage_screen.dart';
 import 'swipe_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -66,6 +68,10 @@ class HomeScreen extends StatelessWidget {
                   if (app.isLimited) ...[
                     const SizedBox(height: 14),
                     _LimitedBanner(onManage: app.repo.presentLimitedPicker),
+                  ],
+                  if (StorageCleaner.supported && !loading) ...[
+                    const SizedBox(height: 14),
+                    const _StorageCard(),
                   ],
                   if (hasDecks) ...[
                     const SizedBox(height: 30),
@@ -961,6 +967,64 @@ class _Credit extends StatelessWidget {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Entry to storage cleanup (Android only).
+class _StorageCard extends StatelessWidget {
+  const _StorageCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Pressable(
+      onTap: () => Navigator.of(context).push(StorageScreen.route()),
+      scale: 0.98,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+        decoration: BoxDecoration(
+          color: p.surface,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: p.stroke),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                gradient: p.accentGradient,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                Icons.cleaning_services_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Storage cleanup',
+                    style: AppText.headline(color: p.text)
+                        .copyWith(fontSize: 16),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Junk, empty folders, large files & documents',
+                    style: AppText.caption(color: p.textDim),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: p.textDim),
+          ],
         ),
       ),
     );
