@@ -31,6 +31,10 @@ class _SwipeScreenState extends State<SwipeScreen> {
       if (d.kind == DeckKind.screenshots) ...d.assets.map((a) => a.id),
   };
 
+  /// Card videos play only while nothing covers this screen.
+  final _videoFocus = ValueNotifier<bool>(true);
+  late final _muted = ValueNotifier<bool>(_app.store.videoMuted);
+
   final List<(AssetEntity, Decision)> _history = [];
   int _index = 0;
   bool _showHint = false;
@@ -43,6 +47,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
   void initState() {
     super.initState();
     _showHint = !_app.store.swipeHintSeen && _queue.isNotEmpty;
+    _muted.addListener(() => _app.store.setVideoMuted(_muted.value));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _precache();
@@ -53,6 +58,8 @@ class _SwipeScreenState extends State<SwipeScreen> {
   @override
   void dispose() {
     _deckCtrl.dispose();
+    _videoFocus.dispose();
+    _muted.dispose();
     _app.flush();
     super.dispose();
   }
@@ -98,16 +105,28 @@ class _SwipeScreenState extends State<SwipeScreen> {
     _deckCtrl.returnCard(decision);
   }
 
-  Future<void> _openViewer(AssetEntity asset) async {
-    final decision = await Navigator.of(context)
-        .push<Decision>(ViewerScreen.route(asset, showActions: true));
+  /// Pauses card videos while [route] is open.
+  Future<T?> _cover<T>(Route<T> route) async {
+    _videoFocus.value = false;
+    final result = await Navigator.of(context).push(route);
+    if (mounted) _videoFocus.value = true;
+    return result;
+  }
+
+  Future<void> _openViewer(
+    AssetEntity asset, [
+    Duration startAt = Duration.zero,
+  ]) async {
+    final decision = await _cover(
+      ViewerScreen.route(asset, showActions: true, startAt: startAt),
+    );
     if (decision != null && mounted) {
       await Future<void>.delayed(const Duration(milliseconds: 120));
       _deckCtrl.swipe(decision);
     }
   }
 
-  void _openBin() => Navigator.of(context).push(ReviewScreen.route());
+  void _openBin() => _cover(ReviewScreen.route());
 
   @override
   Widget build(BuildContext context) {
@@ -195,10 +214,14 @@ class _SwipeScreenState extends State<SwipeScreen> {
                           controller: _deckCtrl,
                           onDecided: _onDecided,
                           onTap: _openViewer,
-                          cardBuilder: (context, asset) => AssetCard(
+                          cardBuilder: (context, asset, depth) => AssetCard(
                             asset: asset,
                             repo: _app.repo,
                             isScreenshot: _screenshots.contains(asset.id),
+                            depth: depth,
+                            videoFocus: _videoFocus,
+                            muted: _muted,
+                            onFullscreen: (at) => _openViewer(asset, at),
                           ),
                         ),
                 ),

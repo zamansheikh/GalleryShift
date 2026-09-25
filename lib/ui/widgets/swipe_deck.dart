@@ -29,7 +29,12 @@ class SwipeDeckController {
   void dispose() => progress.dispose();
 }
 
-typedef CardBuilder = Widget Function(BuildContext context, AssetEntity asset);
+/// [depth] is 0 for the top card, 1 for the one behind it, and so on.
+typedef CardBuilder = Widget Function(
+  BuildContext context,
+  AssetEntity asset,
+  int depth,
+);
 
 class SwipeDeck extends StatefulWidget {
   const SwipeDeck({
@@ -264,54 +269,77 @@ class _SwipeDeckState extends State<SwipeDeck>
     );
   }
 
+  /// Every card gets the same widget structure whatever its depth, so its
+  /// state (a loaded image, a playing video) survives moving to the front.
   Widget _positioned(BuildContext context, int depth, double progress) {
     final asset = widget.items[widget.index + depth];
-    final card = RepaintBoundary(child: widget.cardBuilder(context, asset));
+    final isTop = depth == 0;
 
-    if (depth > 0) {
+    final Matrix4 transform;
+    final Alignment origin;
+    double opacity = 1;
+    double dim = 0;
+    double signed = 0;
+
+    if (isTop) {
+      final angle = _size.width == 0
+          ? 0.0
+          : (_offset.dx / _size.width) * 0.42 * (_grabbedTop ? 1 : -1);
+      transform = Matrix4.translationValues(_offset.dx, _offset.dy, 0)
+        ..rotateZ(angle.clamp(-math.pi / 8, math.pi / 8));
+      origin = Alignment.center;
+      signed = _threshold == 0
+          ? 0.0
+          : (_offset.dx / _threshold).clamp(-1.0, 1.0);
+    } else {
       // Cards behind rise toward the front as the top card leaves.
       final d = depth - progress;
       final scale = 1 - 0.05 * d;
-      final dy = 18.0 * d;
+      transform = Matrix4.translationValues(0, 18.0 * d, 0)
+        ..scaleByDouble(scale, scale, 1, 1);
+      origin = Alignment.bottomCenter;
       // The third card peeks faintly and is fully opaque by the time it
       // becomes second, so the hand-off has no jump.
-      final opacity = depth == 2 ? 0.55 + 0.45 * progress : 1.0;
-      return IgnorePointer(
-        child: Transform.translate(
-          offset: Offset(0, dy),
-          child: Transform.scale(
-            scale: scale,
-            alignment: Alignment.bottomCenter,
-            child: Opacity(opacity: opacity.clamp(0.0, 1.0), child: card),
-          ),
-        ),
-      );
+      opacity = depth == 2 ? 0.55 + 0.45 * progress : 1.0;
+      // Dim what's underneath so only the top card reads as a photo.
+      dim = (0.45 * d).clamp(0.0, 0.6);
     }
 
-    final angle = _size.width == 0
-        ? 0.0
-        : (_offset.dx / _size.width) * 0.42 * (_grabbedTop ? 1 : -1);
-    final signed = _threshold == 0
-        ? 0.0
-        : (_offset.dx / _threshold).clamp(-1.0, 1.0);
-
-    return GestureDetector(
-      onPanStart: _onPanStart,
-      onPanUpdate: _onPanUpdate,
-      onPanEnd: _onPanEnd,
-      onTap: widget.onTap == null ? null : () => widget.onTap!(asset),
-      child: Transform.translate(
-        offset: _offset,
-        child: Transform.rotate(
-          angle: angle.clamp(-math.pi / 8, math.pi / 8),
-          child: Stack(
-            fit: StackFit.passthrough,
-            children: [
-              card,
-              Positioned.fill(
-                child: IgnorePointer(child: _DecisionOverlay(value: signed)),
-              ),
-            ],
+    return IgnorePointer(
+      ignoring: !isTop,
+      child: GestureDetector(
+        onPanStart: isTop ? _onPanStart : null,
+        onPanUpdate: isTop ? _onPanUpdate : null,
+        onPanEnd: isTop ? _onPanEnd : null,
+        onTap: isTop && widget.onTap != null
+            ? () => widget.onTap!(asset)
+            : null,
+        child: Transform(
+          transform: transform,
+          alignment: origin,
+          child: Opacity(
+            opacity: opacity.clamp(0.0, 1.0),
+            child: Stack(
+              fit: StackFit.passthrough,
+              children: [
+                RepaintBoundary(
+                  child: widget.cardBuilder(context, asset, depth),
+                ),
+                Positioned.fill(
+                  child: IgnorePointer(child: _DecisionOverlay(value: signed)),
+                ),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: dim),
+                        borderRadius: BorderRadius.circular(32),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

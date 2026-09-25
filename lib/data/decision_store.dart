@@ -15,6 +15,7 @@ class DecisionStore {
   static const _kDeletedCount = 'deleted_count';
   static const _kOnboarded = 'onboarded';
   static const _kHintSeen = 'swipe_hint_seen';
+  static const _kVideoMuted = 'video_muted';
 
   Set<String> loadKept() => (_prefs.getStringList(_kKept) ?? const []).toSet();
   Future<void> saveKept(Set<String> ids) =>
@@ -37,6 +38,10 @@ class DecisionStore {
 
   bool get swipeHintSeen => _prefs.getBool(_kHintSeen) ?? false;
   Future<void> setSwipeHintSeen() => _prefs.setBool(_kHintSeen, true);
+
+  /// Card videos autoplay, so they start muted until the user unmutes.
+  bool get videoMuted => _prefs.getBool(_kVideoMuted) ?? true;
+  Future<void> setVideoMuted(bool v) => _prefs.setBool(_kVideoMuted, v);
 
   Future<void> resetProgress() async {
     await _prefs.remove(_kKept);

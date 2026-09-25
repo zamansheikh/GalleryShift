@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
@@ -8,6 +9,7 @@ import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 import '../../data/gallery_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../util/format.dart';
+import 'video_view.dart';
 
 /// Image provider for a full card. Shared with precaching so both hit the
 /// same cache entry.
@@ -36,11 +38,24 @@ class AssetCard extends StatelessWidget {
     required this.asset,
     required this.repo,
     this.isScreenshot = false,
+    this.depth = 0,
+    this.videoFocus,
+    this.muted,
+    this.onFullscreen,
   });
 
   final AssetEntity asset;
   final GalleryRepository repo;
   final bool isScreenshot;
+
+  /// Position in the deck; videos play only at depth 0.
+  final int depth;
+
+  /// For videos: whether playback is allowed right now, and the shared mute
+  /// setting. Without them a video card shows its poster only.
+  final ValueListenable<bool>? videoFocus;
+  final ValueNotifier<bool>? muted;
+  final void Function(Duration position)? onFullscreen;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +68,28 @@ class AssetCard extends StatelessWidget {
         // Fill the card when the shapes are close; otherwise show the whole
         // picture on a blurred copy of itself so nothing important is cropped.
         final fill = (aspect / cardAspect - 1).abs() < 0.22;
+        final isVideo = asset.type == AssetType.video;
+        final playable = isVideo && videoFocus != null && muted != null;
+        // Scrim and date/size info. A playing video puts its controls
+        // underneath, so the info sits above them.
+        final overlay = IgnorePointer(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              const _BottomScrim(),
+              Positioned(
+                left: 22,
+                right: 22,
+                bottom: playable ? kVideoControlsHeight + 24 : 22,
+                child: _CardInfo(
+                  asset: asset,
+                  repo: repo,
+                  isScreenshot: isScreenshot,
+                ),
+              ),
+            ],
+          ),
+        );
 
         return DecoratedBox(
           decoration: BoxDecoration(
@@ -87,19 +124,20 @@ class AssetCard extends StatelessWidget {
                     image: cardImageFor(asset),
                     fit: fill ? BoxFit.cover : BoxFit.contain,
                   ),
-                  const _BottomScrim(),
-                  if (asset.type == AssetType.video)
-                    const Center(child: _PlayBadge()),
-                  Positioned(
-                    left: 22,
-                    right: 22,
-                    bottom: 22,
-                    child: _CardInfo(
+                  if (playable)
+                    CardVideo(
                       asset: asset,
-                      repo: repo,
-                      isScreenshot: isScreenshot,
-                    ),
-                  ),
+                      depth: depth,
+                      fit: fill ? BoxFit.cover : BoxFit.contain,
+                      focus: videoFocus!,
+                      muted: muted!,
+                      onFullscreen: onFullscreen,
+                      overlay: overlay,
+                    )
+                  else ...[
+                    overlay,
+                    if (isVideo) const Center(child: _PlayBadge()),
+                  ],
                 ],
               ),
             ),
