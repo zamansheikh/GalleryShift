@@ -126,7 +126,11 @@ class AppController extends ChangeNotifier {
         repo.loadLibrary(),
         repo.loadScreenshotIds(),
       ]);
-      _library = results[0] as List<AssetEntity>;
+      // Sort here rather than trusting the platform order: on Android it
+      // follows when files were added to the device (copied or restored
+      // galleries all share one date), not when they were taken.
+      _library = (results[0] as List<AssetEntity>)
+        ..sort((a, b) => b.createDateTime.compareTo(a.createDateTime));
       _screenshotIds = results[1] as Set<String>;
       _byId = {for (final a in _library) a.id: a};
       _pruneMissing();

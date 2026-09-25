@@ -152,18 +152,9 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 10, 16, 0),
       child: Row(
         children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              gradient: p.accentGradient,
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: const Icon(
-              Icons.swipe_rounded,
-              color: Colors.white,
-              size: 19,
-            ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.asset('assets/brand/logo.png', width: 34, height: 34),
           ),
           const SizedBox(width: 10),
           Text('GalleryShift', style: AppText.headline(color: p.text)),

@@ -23,6 +23,9 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
+  assets:
+    - assets/brand/logo.png
+
   fonts:
     - family: Jakarta
       fonts:

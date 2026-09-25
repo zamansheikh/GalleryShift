@@ -96,97 +96,122 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
     return Scaffold(
       backgroundColor: p.bg,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: Row(
-                children: [
-                  GlassIconButton(
-                    icon: Icons.arrow_back_rounded,
-                    tooltip: 'Back',
-                    onTap: () => Navigator.of(context).pop(),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Review bin', style: AppText.title(color: p.text)),
-                        const SizedBox(height: 2),
-                        FutureBuilder<int>(
-                          future: _toDeleteSize(app, items),
-                          builder: (context, snap) => Text(
-                            items.isEmpty
-                                ? 'Empty'
-                                : '${plural(items.length, 'item')}'
-                                      '${snap.hasData ? ' · ${formatBytes(snap.data!)}' : ''}',
-                            style: AppText.caption(color: p.textDim),
-                          ),
+      body: Stack(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: Row(
+                    children: [
+                      GlassIconButton(
+                        icon: Icons.arrow_back_rounded,
+                        tooltip: 'Back',
+                        onTap: () => Navigator.of(context).pop(),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Review bin',
+                              style: AppText.title(color: p.text),
+                            ),
+                            const SizedBox(height: 2),
+                            FutureBuilder<int>(
+                              future: _toDeleteSize(app, items),
+                              builder: (context, snap) => Text(
+                                items.isEmpty
+                                    ? 'Empty'
+                                    : '${plural(items.length, 'item')}'
+                                          '${snap.hasData ? ' · ${formatBytes(snap.data!)}' : ''}',
+                                style: AppText.caption(color: p.textDim),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
+                Expanded(
+                  child: items.isEmpty
+                      ? const _EmptyBin()
+                      : CustomScrollView(
+                          slivers: [
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  12,
+                                  20,
+                                  16,
+                                ),
+                                child: _InfoNote(
+                                  text: Platform.isIOS
+                                      ? 'Tap anything you want to keep. Deleted items stay in Recently Deleted for 30 days.'
+                                      : 'Tap anything you want to keep. Deleted items go to your device\'s trash where supported.',
+                                ),
+                              ),
+                            ),
+                            SliverPadding(
+                              padding: const EdgeInsets.fromLTRB(
+                                16,
+                                0,
+                                16,
+                                160,
+                              ),
+                              sliver: SliverGrid.builder(
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 3,
+                                      mainAxisSpacing: 6,
+                                      crossAxisSpacing: 6,
+                                    ),
+                                itemCount: items.length,
+                                itemBuilder: (context, i) {
+                                  final a = items[i];
+                                  return _BinTile(
+                                    key: ValueKey(a.id),
+                                    asset: a,
+                                    rescued: _rescued.contains(a.id),
+                                    onTap: () => _toggle(a),
+                                    onLongPress: () =>
+                                        Navigator.of(context)
+                                            .push(ViewerScreen.route(a)),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ],
+            ),
+          ),
+          if (items.isNotEmpty)
+            // In the body, not Scaffold.bottomSheet: that paints its own
+            // surface and rounded top over the fade.
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _BottomBar(
+                rescuedCount: _rescued.length,
+                deleteCount: toDelete.length,
+                sizeFuture: _toDeleteSize(app, toDelete),
+                busy: _deleting,
+                onKeep: () => _keepRescued(app),
+                onDelete: toDelete.isEmpty
+                    ? null
+                    : () => _delete(app, toDelete),
               ),
             ),
-            Expanded(
-              child: items.isEmpty
-                  ? const _EmptyBin()
-                  : CustomScrollView(
-                      slivers: [
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-                            child: _InfoNote(
-                              text: Platform.isIOS
-                                  ? 'Tap anything you want to keep. Deleted items stay in Recently Deleted for 30 days.'
-                                  : 'Tap anything you want to keep. Deleted items go to your device\'s trash where supported.',
-                            ),
-                          ),
-                        ),
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 160),
-                          sliver: SliverGrid.builder(
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 3,
-                                  mainAxisSpacing: 6,
-                                  crossAxisSpacing: 6,
-                                ),
-                            itemCount: items.length,
-                            itemBuilder: (context, i) {
-                              final a = items[i];
-                              return _BinTile(
-                                key: ValueKey(a.id),
-                                asset: a,
-                                rescued: _rescued.contains(a.id),
-                                onTap: () => _toggle(a),
-                                onLongPress: () =>
-                                    Navigator.of(context)
-                                        .push(ViewerScreen.route(a)),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
-          ],
-        ),
+        ],
       ),
-      bottomSheet: items.isEmpty
-          ? null
-          : _BottomBar(
-              rescuedCount: _rescued.length,
-              deleteCount: toDelete.length,
-              sizeFuture: _toDeleteSize(app, toDelete),
-              busy: _deleting,
-              onKeep: () => _keepRescued(app),
-              onDelete: toDelete.isEmpty ? null : () => _delete(app, toDelete),
-            ),
     );
   }
 }

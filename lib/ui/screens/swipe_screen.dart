@@ -268,6 +268,9 @@ class _ProgressBar extends StatelessWidget {
         curve: Motion.emphasized,
         builder: (context, v, _) => FractionallySizedBox(
           widthFactor: v,
+          // The parent's alignment loosens constraints; without this the
+          // fill collapses to zero height.
+          heightFactor: 1,
           child: DecoratedBox(
             decoration: BoxDecoration(
               gradient: p.accentGradient,
@@ -378,6 +381,8 @@ class _ActionBar extends StatelessWidget {
 }
 
 class _RoundAction extends StatelessWidget {
+  static const double _slot = 74;
+
   const _RoundAction({
     required this.icon,
     required this.label,
@@ -411,27 +416,33 @@ class _RoundAction extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Transform.scale(
-            scale: 1 + 0.12 * e,
-            child: Container(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: fill,
-                border: Border.all(
-                  color: Color.lerp(p.stroke, color, 0.35 + 0.65 * e)!,
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.12 + 0.35 * e),
-                    blurRadius: 18 + 14 * e,
-                    offset: const Offset(0, 8),
+          // Every button gets the same slot so the labels line up.
+          SizedBox(
+            height: _slot,
+            child: Center(
+              child: Transform.scale(
+                scale: 1 + 0.12 * e,
+                child: Container(
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: fill,
+                    border: Border.all(
+                      color: Color.lerp(p.stroke, color, 0.35 + 0.65 * e)!,
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withValues(alpha: 0.12 + 0.35 * e),
+                        blurRadius: 18 + 14 * e,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
-                ],
+                  child: Icon(icon, color: iconColor, size: size * 0.42),
+                ),
               ),
-              child: Icon(icon, color: iconColor, size: size * 0.42),
             ),
           ),
           const SizedBox(height: 8),
