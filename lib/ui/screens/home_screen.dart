@@ -6,11 +6,16 @@ import '../../state/app_scope.dart';
 import '../../theme/app_theme.dart';
 import '../../util/format.dart';
 import '../widgets/common.dart';
+import '../widgets/deck_actions.dart';
 import 'review_screen.dart';
 import 'swipe_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
+
+  /// Long-press on a deck: progress, continue, review again.
+  void _options(BuildContext context, Deck deck) =>
+      showDeckSheet(context, deck, onOpen: () => _open(context, deck));
 
   void _open(BuildContext context, Deck deck) {
     Navigator.of(context)
@@ -89,6 +94,7 @@ class HomeScreen extends StatelessWidget {
                             deck: deck,
                             app: app,
                             onTap: () => _open(context, deck),
+                            onLongPress: () => _options(context, deck),
                           );
                         },
                       ),
@@ -128,6 +134,7 @@ class HomeScreen extends StatelessWidget {
                     deck: deck,
                     app: app,
                     onTap: () => _open(context, deck),
+                    onLongPress: () => _options(context, deck),
                   );
                 },
               ),
@@ -593,10 +600,12 @@ class _QuickDeckTile extends StatelessWidget {
     required this.deck,
     required this.app,
     required this.onTap,
+    required this.onLongPress,
   });
   final Deck deck;
   final AppController app;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -605,6 +614,7 @@ class _QuickDeckTile extends StatelessWidget {
     final cover = app.coverFor(deck);
     return Pressable(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: SizedBox(
         width: 158,
         child: ClipRRect(
@@ -680,10 +690,12 @@ class _MonthTile extends StatelessWidget {
     required this.deck,
     required this.app,
     required this.onTap,
+    required this.onLongPress,
   });
   final Deck deck;
   final AppController app;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -694,6 +706,7 @@ class _MonthTile extends StatelessWidget {
     final cover = app.coverFor(deck);
     return Pressable(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Container(
         decoration: BoxDecoration(
           color: p.surface,

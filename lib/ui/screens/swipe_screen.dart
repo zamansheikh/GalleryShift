@@ -10,6 +10,7 @@ import '../../theme/app_theme.dart';
 import '../../util/format.dart';
 import '../widgets/asset_card.dart';
 import '../widgets/common.dart';
+import '../widgets/deck_actions.dart';
 import '../widgets/swipe_deck.dart';
 import 'review_screen.dart';
 import 'viewer_screen.dart';
@@ -25,7 +26,7 @@ class SwipeScreen extends StatefulWidget {
 class _SwipeScreenState extends State<SwipeScreen> {
   final _deckCtrl = SwipeDeckController();
   late final AppController _app = AppScope.read(context);
-  late final List<AssetEntity> _queue = _app.sessionQueue(widget.deck);
+  late List<AssetEntity> _queue = _app.sessionQueue(widget.deck);
   late final Set<String> _screenshots = {
     for (final d in _app.quickDecks)
       if (d.kind == DeckKind.screenshots) ...d.assets.map((a) => a.id),
@@ -128,6 +129,16 @@ class _SwipeScreenState extends State<SwipeScreen> {
 
   void _openBin() => _cover(ReviewScreen.route());
 
+  Future<void> _reviewAgain() async {
+    if (!await confirmReviewAgain(context, widget.deck) || !mounted) return;
+    setState(() {
+      _queue = _app.sessionQueue(widget.deck);
+      _index = 0;
+      _history.clear();
+    });
+    _precache();
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
@@ -206,6 +217,10 @@ class _SwipeScreenState extends State<SwipeScreen> {
                           binCount: app.trashCount,
                           onReview: _openBin,
                           onUndo: _history.isEmpty ? null : _undo,
+                          deckName: deckName(widget.deck),
+                          onReviewAgain: _app.decidedCount(widget.deck) > 0
+                              ? _reviewAgain
+                              : null,
                         )
                       : SwipeDeck(
                           key: const ValueKey('deck'),
@@ -462,6 +477,8 @@ class _Finished extends StatelessWidget {
     required this.binCount,
     required this.onReview,
     required this.onUndo,
+    required this.deckName,
+    required this.onReviewAgain,
   });
 
   final int kept;
@@ -470,6 +487,8 @@ class _Finished extends StatelessWidget {
   final int binCount;
   final VoidCallback onReview;
   final VoidCallback? onUndo;
+  final String deckName;
+  final VoidCallback? onReviewAgain;
 
   @override
   Widget build(BuildContext context) {
@@ -515,7 +534,7 @@ class _Finished extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               wasEmpty
-                  ? 'You have already been through every item in this deck.'
+                  ? 'You\u2019ve already sorted everything in $deckName.'
                   : 'You kept ${plural(kept, 'item')} and set aside ${formatCount(deleted)} to delete.',
               style: AppText.body(color: p.textDim),
               textAlign: TextAlign.center,
@@ -539,6 +558,15 @@ class _Finished extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 30),
+            // A finished deck opened again: reviewing it is the main action.
+            if (wasEmpty && onReviewAgain != null) ...[
+              PrimaryButton(
+                label: 'Review again',
+                icon: Icons.restart_alt_rounded,
+                onTap: onReviewAgain,
+              ),
+              const SizedBox(height: 12),
+            ],
             if (binCount > 0) ...[
               PrimaryButton(
                 label: 'Review & delete $binCount',
@@ -551,6 +579,21 @@ class _Finished extends StatelessWidget {
               label: 'Back to decks',
               onTap: () => Navigator.of(context).pop(),
             ),
+            if (!wasEmpty && onReviewAgain != null) ...[
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: onReviewAgain,
+                icon: Icon(
+                  Icons.restart_alt_rounded,
+                  color: p.textDim,
+                  size: 18,
+                ),
+                label: Text(
+                  'Review this deck again',
+                  style: AppText.label(color: p.textDim),
+                ),
+              ),
+            ],
             if (onUndo != null) ...[
               const SizedBox(height: 8),
               TextButton.icon(

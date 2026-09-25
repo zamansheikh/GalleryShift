@@ -23,6 +23,7 @@ class AppController extends ChangeNotifier {
   AppController({required this.repo, required this.store}) {
     _kept = store.loadKept();
     _trash = List.of(store.loadTrash());
+    _trashSet = _trash.toSet();
   }
 
   final GalleryRepository repo;
@@ -78,6 +79,13 @@ class AppController extends ChangeNotifier {
 
   int remainingCount(Deck deck) =>
       deck.assets.where((a) => !isReviewed(a.id)).length;
+
+  /// Items in [deck] that already have a decision (kept, or in the bin).
+  int decidedCount(Deck deck) => deck.assets.length - remainingCount(deck);
+
+  /// Items in [deck] waiting in the bin.
+  int binCountIn(Deck deck) =>
+      deck.assets.where((a) => _trashSet.contains(a.id)).length;
 
   AssetEntity? coverFor(Deck deck) {
     for (final a in deck.assets) {
@@ -291,6 +299,25 @@ class AppController extends ChangeNotifier {
     _scheduleSave();
     notifyListeners();
     return DeleteOutcome(count: deleted.length, bytes: freed);
+  }
+
+  /// Forgets every decision in [deck] so its items come back to be swiped
+  /// again (in every deck they belong to). Items waiting in the bin are taken
+  /// out of it; items already deleted are gone and unaffected.
+  /// Returns how many items came back.
+  int reviewAgain(Deck deck) {
+    var count = 0;
+    for (final a in deck.assets) {
+      final wasKept = _kept.remove(a.id);
+      final wasBinned = _trashSet.remove(a.id);
+      if (wasBinned) _trash.remove(a.id);
+      if (wasKept || wasBinned) count++;
+    }
+    if (count > 0) {
+      _scheduleSave();
+      notifyListeners();
+    }
+    return count;
   }
 
   Future<void> resetProgress() async {

@@ -14,6 +14,7 @@ class Pressable extends StatefulWidget {
     super.key,
     required this.child,
     required this.onTap,
+    this.onLongPress,
     this.scale = 0.96,
     this.haptic = true,
     this.semanticLabel,
@@ -21,6 +22,7 @@ class Pressable extends StatefulWidget {
 
   final Widget child;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final double scale;
   final bool haptic;
   final String? semanticLabel;
@@ -54,6 +56,13 @@ class _PressableState extends State<Pressable> {
                 widget.onTap!();
               }
             : null,
+        onLongPress: widget.onLongPress == null
+            ? null
+            : () {
+                _set(false);
+                HapticFeedback.mediumImpact();
+                widget.onLongPress!();
+              },
         child: AnimatedScale(
           scale: _down ? widget.scale : 1,
           duration: Motion.fast,

@@ -18,7 +18,14 @@ Future<VideoPlayerController> openVideo(AssetEntity asset) async {
   // May download from iCloud first.
   final file = await asset.file;
   if (file == null) throw StateError('No file for ${asset.id}');
-  final ctrl = VideoPlayerController.file(file);
+  final ctrl = VideoPlayerController.file(
+    file,
+    // Mix with other audio instead of taking audio focus. With focus
+    // handling on, Android refuses to play at all during a phone call (the
+    // call holds focus locked), and a muted autoplaying card would pause the
+    // user's music.
+    videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+  );
   await ctrl.initialize();
   await ctrl.setLooping(true);
   return ctrl;
