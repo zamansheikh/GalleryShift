@@ -18,6 +18,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
@@ -26,3 +27,15 @@ flutter:
     - family: Jakarta
       fonts:
         - asset: assets/fonts/PlusJakartaSans.ttf
+
+# App icon. Regenerate with:
+#   flutter test tool/generate_icon_test.dart && dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: assets/icon/icon.png
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  min_sdk_android: 21
+  adaptive_icon_background: assets/icon/icon_background.png
+  adaptive_icon_foreground: assets/icon/icon_foreground.png
+  adaptive_icon_monochrome: assets/icon/icon_monochrome.png
