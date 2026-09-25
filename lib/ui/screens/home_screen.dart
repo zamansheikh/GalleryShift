@@ -5,6 +5,7 @@ import '../../state/app_controller.dart';
 import '../../state/app_scope.dart';
 import '../../theme/app_theme.dart';
 import '../../util/format.dart';
+import '../widgets/about_sheet.dart';
 import '../widgets/common.dart';
 import '../widgets/deck_actions.dart';
 import 'review_screen.dart';
@@ -31,6 +32,8 @@ class HomeScreen extends StatelessWidget {
       return _ErrorState(onRetry: app.load);
     }
     final loading = app.loadState != LoadState.ready;
+    // An empty library has nothing to swipe: skip the deck row entirely.
+    final hasDecks = loading || app.libraryCount > 0;
 
     return Scaffold(
       backgroundColor: p.bg,
@@ -64,42 +67,45 @@ class HomeScreen extends StatelessWidget {
                     const SizedBox(height: 14),
                     _LimitedBanner(onManage: app.repo.presentLimitedPicker),
                   ],
-                  const SizedBox(height: 30),
-                  _SectionTitle('Start swiping'),
-                  const SizedBox(height: 14),
+                  if (hasDecks) ...[
+                    const SizedBox(height: 30),
+                    _SectionTitle('Start swiping'),
+                    const SizedBox(height: 14),
+                  ],
                 ],
               ),
             ),
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 212,
-                child: loading
-                    ? ListView.separated(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        scrollDirection: Axis.horizontal,
-                        itemCount: 3,
-                        separatorBuilder: (_, _) => const SizedBox(width: 12),
-                        itemBuilder: (_, _) =>
-                            const _Skeleton(width: 158, radius: 24),
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        scrollDirection: Axis.horizontal,
-                        physics: const BouncingScrollPhysics(),
-                        itemCount: app.quickDecks.length,
-                        separatorBuilder: (_, _) => const SizedBox(width: 12),
-                        itemBuilder: (context, i) {
-                          final deck = app.quickDecks[i];
-                          return _QuickDeckTile(
-                            deck: deck,
-                            app: app,
-                            onTap: () => _open(context, deck),
-                            onLongPress: () => _options(context, deck),
-                          );
-                        },
-                      ),
+            if (hasDecks)
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 212,
+                  child: loading
+                      ? ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          scrollDirection: Axis.horizontal,
+                          itemCount: 3,
+                          separatorBuilder: (_, _) => const SizedBox(width: 12),
+                          itemBuilder: (_, _) =>
+                              const _Skeleton(width: 158, radius: 24),
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: app.quickDecks.length,
+                          separatorBuilder: (_, _) => const SizedBox(width: 12),
+                          itemBuilder: (context, i) {
+                            final deck = app.quickDecks[i];
+                            return _QuickDeckTile(
+                              deck: deck,
+                              app: app,
+                              onTap: () => _open(context, deck),
+                              onLongPress: () => _options(context, deck),
+                            );
+                          },
+                        ),
+                ),
               ),
-            ),
             if (loading || app.monthDecks.isNotEmpty)
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 32, 20, 14),
@@ -141,6 +147,7 @@ class HomeScreen extends StatelessWidget {
             ),
             if (!loading && app.libraryCount == 0)
               const SliverToBoxAdapter(child: _EmptyLibrary()),
+            const SliverToBoxAdapter(child: _Credit()),
           ],
         ),
       ),
@@ -218,6 +225,14 @@ class _Header extends StatelessWidget {
                     app.repo.presentLimitedPicker();
                   },
                 ),
+              _SheetItem(
+                icon: Icons.info_outline_rounded,
+                label: 'About GalleryShift',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  showAboutSheet(context);
+                },
+              ),
               _SheetItem(
                 icon: Icons.refresh_rounded,
                 label: 'Rescan library',
@@ -906,6 +921,45 @@ class _ErrorState extends StatelessWidget {
                 onTap: onRetry,
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Quiet developer credit at the end of the home screen; opens About.
+class _Credit extends StatelessWidget {
+  const _Credit();
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        0,
+        20,
+        24 + MediaQuery.paddingOf(context).bottom,
+      ),
+      child: Center(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => showAboutSheet(context),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Text.rich(
+              TextSpan(
+                style: AppText.caption(color: p.textFaint),
+                children: [
+                  const TextSpan(text: 'Made by '),
+                  TextSpan(
+                    text: Developer.name,
+                    style: AppText.caption(color: p.textDim),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

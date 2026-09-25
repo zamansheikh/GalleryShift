@@ -38,7 +38,7 @@ class GalleryRepository {
       type: RequestType.common,
       filterOption: _newestFirst,
     );
-    if (paths.isEmpty) return const [];
+    if (paths.isEmpty) return [];
     final all = paths.first;
     final count = await all.assetCountAsync;
     const pageSize = 1500;

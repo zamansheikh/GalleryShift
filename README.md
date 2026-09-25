@@ -37,7 +37,7 @@
 - **Videos play on the card.** They autoplay muted, and the next video preloads. Controls: a seek bar, double-tap either side to jump ±10 s, and long-press for 4× speed. A full-screen player continues from the same spot.
 - **A safety net.** Swiping left only moves an item to the review bin. In the bin, tap anything to rescue it, then delete the rest in one go. Deleted items go to *Recently Deleted* on iOS, or the system trash on Android 11+, for 30 days.
 - **Progress you can see.** The home screen shows how much of the library you've reviewed, space freed and items deleted, and remembers where you left off.
-- **Private by design.** Photos never leave the device. The app has no network code, no analytics and no account.
+- **Private by design.** Photos never leave the device. The app makes no network requests, has no analytics and needs no account. The only links, to the developer's profiles on the About screen, open in your browser.
 - **Polished details.** Follows the system light or dark mode, uses the bundled Plus Jakarta Sans font, and has haptics throughout.
 
 ## Getting started
@@ -101,6 +101,13 @@ flutter test tool/showcase_test.dart                                          # 
 `tool/showcase_test.dart` writes a PNG. The README uses a JPEG copy; convert it with `sips -s format jpeg docs/showcase.png --out docs/showcase.jpg`.
 
 Screenshots were taken on an Android emulator filled with sample images from [Lorem Picsum](https://picsum.photos) and sample videos from [samplelib](https://samplelib.com).
+
+## Developer
+
+Designed and developed by **Zaman Sheikh**.
+
+- GitHub: [github.com/zamansheikh](https://github.com/zamansheikh)
+- Facebook: [fb.com/zamansheikh.404](https://fb.com/zamansheikh.404)
 
 ## Built with
 

@@ -76,4 +76,49 @@ void main() {
     expect(reopened.decidedCount(marchDeck), 0);
     reopened.dispose();
   });
+
+  test('an empty library loads to the ready state, not an error', () async {
+    final empty = AppController(
+      repo: _FakeRepo(const []),
+      store: await DecisionStore.open(),
+    );
+    await empty.load();
+    expect(empty.loadState, LoadState.ready);
+    expect(empty.libraryCount, 0);
+    empty.dispose();
+  });
+
+  test('load sorts the library newest first by capture date', () async {
+    AssetEntity at(String id, int year) => AssetEntity(
+      id: id,
+      typeInt: 1,
+      width: 1,
+      height: 1,
+      createDateSecond: DateTime(year).millisecondsSinceEpoch ~/ 1000,
+    );
+    final loaded = AppController(
+      // Platform order (e.g. Android's date-added) is not capture order.
+      repo: _FakeRepo([at('old', 2020), at('new', 2026), at('mid', 2023)]),
+      store: await DecisionStore.open(),
+    );
+    await loaded.load();
+    expect(loaded.quickDecks.first.assets.map((a) => a.id), [
+      'new',
+      'mid',
+      'old',
+    ]);
+    loaded.dispose();
+  });
+}
+
+/// Serves a fixed library, the way the plugin can: possibly unmodifiable.
+class _FakeRepo extends GalleryRepository {
+  _FakeRepo(this.assets);
+  final List<AssetEntity> assets;
+
+  @override
+  Future<List<AssetEntity>> loadLibrary() async => List.unmodifiable(assets);
+
+  @override
+  Future<Set<String>> loadScreenshotIds() async => const {};
 }
