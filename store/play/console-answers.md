@@ -70,10 +70,18 @@ Leave the under-13 groups unticked. Ticking them brings in the Families policy a
 
 Play asks for this because the bundle requests `READ_MEDIA_IMAGES` and `READ_MEDIA_VIDEO`. It may only appear after the bundle is uploaded.
 
-Core functionality (short form, 240 characters):
+Play Console shows the error "All developers requesting access to the photo and video permissions are required to tell Google Play about the core functionality of their app" until this is filled in. The form has one box per permission, 250 characters each.
+
+`READ_MEDIA_IMAGES` (242 of 250 characters):
 
 ```
-GalleryShift is a gallery cleanup app. Its core function shows every photo and video in the library one at a time so the user can swipe to keep or delete each one. It must read the whole library to do that; a photo picker cannot serve this.
+GalleryShift is a gallery cleanup app. Its core feature shows every photo in the user's library, one at a time, so they can swipe to keep or delete each one. It needs frequent access to the whole library; a photo picker cannot serve this use.
+```
+
+`READ_MEDIA_VIDEO` (242 of 250 characters):
+
+```
+GalleryShift is a gallery cleanup app. Its core feature plays every video in the user's library, one at a time, so they can swipe to keep or delete each one. It needs frequent access to the whole library; a photo picker cannot serve this use.
 ```
 
 If the form allows more room:
@@ -84,25 +92,25 @@ GalleryShift is a gallery cleanup app. Its one core function is to show the user
 
 ## All files access declaration
 
-Play asks for this because the bundle requests `MANAGE_EXTERNAL_STORAGE`. This is the declaration most likely to be questioned: see "What may be questioned in review" in `README.md`.
+Play asks for this because the bundle requests `MANAGE_EXTERNAL_STORAGE`. Until it is filled in, Play Console shows the error "This release includes permissions that haven't been declared in Play Console" and links to Sensitive app permissions. This is the declaration most likely to be questioned: see "What may be questioned in review" in `README.md`.
 
-| Question | Answer |
-|---|---|
-| Does your app need All files access for its core functionality? | Yes |
-| Which permitted use fits | **File management.** Play's wording covers apps that access and manage files and folders outside their own storage, including maintenance. If the choices differ, pick the closest to file or storage management |
-| Video | The link to `all-files-access-demo.mp4`, once you have uploaded it (unlisted YouTube works) |
+The form has four fields, as seen in Play Console on 12 October 2026.
 
-Why the app needs it:
+**All files access** (describe one feature that needs a permitted use; 464 of 500 characters):
 
 ```
-GalleryShift is a storage cleanup app. Its Storage cleanup feature scans the device's shared storage to find and remove junk files (leftovers from the system trash, used APK installers, temp files and abandoned partial downloads, thumbnail caches), empty folders, large files and old documents. The user reviews each category and chooses what to delete; nothing is removed without confirmation. All files access is requested only when the user opens this feature, after an in-app screen explains why.
+Storage cleanup, a file management feature. It scans the phone's shared storage to find junk files (leftovers from the system trash, used APK installers, temp files, abandoned partial downloads, thumbnail caches), empty folders, large files and old documents in every folder. The user reviews each category, can open a file to check it, and chooses what to delete. Nothing is removed without confirmation. Access is requested only when the user opens this feature.
 ```
 
-Why other ways of reaching files are not enough:
+**Usage** (tick boxes): tick **Core functionality** only. Leave Personalization, Security or fraud prevention, Analytics, and Ads or monetization empty.
+
+**Technical reason** (why the Storage Access Framework or MediaStore will not do; 468 of 500 characters):
 
 ```
-The files this feature cleans are not media, are often hidden, and are spread across every folder of shared storage, so the MediaStore API does not return them (for example .trashed leftovers, .apk, .log and .tmp files, .thumbnails caches, and empty directories). The Storage Access Framework cannot serve either: on Android 11 and later it does not allow selecting the storage root or the Download folder, and it would make the user pick every folder by hand. Scanning the whole of shared storage in one pass is the core of the feature. The app never reads other apps' private data (Android/data, Android/obb) and has no internet permission, so no file or file name can leave the device.
+The files this feature cleans are not media and are often hidden: trash leftovers, .apk, .log and .tmp files, thumbnail caches and empty folders, spread across all of shared storage. MediaStore does not return them. The Storage Access Framework cannot serve either: on Android 11+ it cannot grant the storage root or the Download folder, and the user would have to pick every folder by hand. The app never reads other apps' private data and has no internet permission.
 ```
+
+**Video instructions**: `https://www.youtube.com/watch?v=lBYsHyRAoHY`, which is `all-files-access-demo.mp4` uploaded to the Silifton channel. Play recommends 30 seconds or shorter; this one runs 71 seconds.
 
 ## Government, financial, health and news declarations
 
