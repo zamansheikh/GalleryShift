@@ -12,18 +12,33 @@ import '../util/format.dart';
 enum LoadState { idle, loading, ready, error }
 
 class DeleteOutcome {
-  const DeleteOutcome({required this.count, required this.bytes});
+  const DeleteOutcome({
+    required this.count,
+    required this.bytes,
+    this.inTrash = false,
+  });
   final int count;
   final int bytes;
+
+  /// The items went to a system trash that still takes up space until it is
+  /// emptied (Android 11+).
+  final bool inTrash;
   bool get cancelled => count == 0;
 }
 
 /// App-wide state: permission, library, decisions and stats.
 class AppController extends ChangeNotifier {
   AppController({required this.repo, required this.store}) {
-    _kept = store.loadKept();
-    _trash = List.of(store.loadTrash());
-    _trashSet = _trash.toSet();
+    for (final raw in store.loadKept()) {
+      final (id, stamp) = DecisionStore.decode(raw);
+      _kept.add(id);
+      if (stamp != null) _stamps[id] = stamp;
+    }
+    for (final raw in store.loadTrash()) {
+      final (id, stamp) = DecisionStore.decode(raw);
+      if (_trashSet.add(id)) _trash.add(id);
+      if (stamp != null) _stamps[id] = stamp;
+    }
   }
 
   final GalleryRepository repo;
@@ -40,15 +55,25 @@ class AppController extends ChangeNotifier {
   List<AssetEntity> _library = const [];
   Map<String, AssetEntity> _byId = const {};
   Set<String> _screenshotIds = const {};
-  late Set<String> _kept;
-  late List<String> _trash;
-  Set<String> _trashSet = {};
+  final Set<String> _kept = {};
+  final List<String> _trash = [];
+  final Set<String> _trashSet = {};
+
+  /// Capture time of each decided asset, recorded when it was decided. See
+  /// [DecisionStore.encode] for why.
+  final Map<String, int> _stamps = {};
 
   List<Deck> quickDecks = const [];
   List<Deck> monthDecks = const [];
 
   Timer? _saveTimer;
-  bool _refreshing = false;
+  Future<void>? _loading;
+  bool _reloadWanted = false;
+
+  /// Bumped whenever the library is changed here (a delete), so a read that
+  /// started earlier is known to be stale.
+  int _epoch = 0;
+  bool _disposed = false;
 
   // ---------------------------------------------------------------- getters
 
@@ -98,14 +123,14 @@ class AppController extends ChangeNotifier {
 
   Future<void> bootstrap() async {
     permission = await repo.permissionState();
-    notifyListeners();
+    _notify();
     if (hasAccess) await load();
   }
 
   Future<PermissionState> requestAccess() async {
     permission = await repo.requestPermission();
     askedForAccess = true;
-    notifyListeners();
+    _notify();
     if (hasAccess) {
       await store.setOnboarded();
       await load();
@@ -118,54 +143,91 @@ class AppController extends ChangeNotifier {
   Future<void> onResume() async {
     final before = permission;
     permission = await repo.permissionState();
-    if (permission != before) notifyListeners();
+    if (permission != before) _notify();
     if (hasAccess) await load(quiet: true);
   }
 
-  Future<void> load({bool quiet = false}) async {
-    if (_refreshing) return;
-    _refreshing = true;
+  /// Reads the library. Calls made while a read is in flight share it, and
+  /// make it read once more before finishing, so nobody is answered with
+  /// data from before their request.
+  Future<void> load({bool quiet = false}) {
+    final running = _loading;
+    if (running != null) {
+      _reloadWanted = true;
+      return running;
+    }
+    return _loading = _load(quiet).whenComplete(() => _loading = null);
+  }
+
+  Future<void> _load(bool quiet) async {
     if (!quiet || loadState != LoadState.ready) {
       loadState = LoadState.loading;
-      notifyListeners();
+      _notify();
     }
     try {
-      final results = await Future.wait([
-        repo.loadLibrary(),
-        repo.loadScreenshotIds(),
-      ]);
-      // Sort here rather than trusting the platform order: on Android it
-      // follows when files were added to the device (copied or restored
-      // galleries all share one date), not when they were taken.
-      // Sort a copy: the repository may hand back an unmodifiable list.
-      _library = List.of(results[0] as List<AssetEntity>)
-        ..sort((a, b) => b.createDateTime.compareTo(a.createDateTime));
-      _screenshotIds = results[1] as Set<String>;
-      _byId = {for (final a in _library) a.id: a};
-      _pruneMissing();
-      _buildDecks();
-      loadState = LoadState.ready;
-      loadError = null;
+      while (true) {
+        _reloadWanted = false;
+        final epoch = _epoch;
+        final results = await Future.wait([
+          repo.loadLibrary(),
+          repo.loadScreenshotIds(),
+        ]);
+        // Something was deleted, or a newer reload was asked for, while this
+        // read was under way: its answer may be out of date. Read again
+        // rather than put deleted items back on screen.
+        if (epoch != _epoch || _reloadWanted) continue;
+
+        // Sort here rather than trusting the platform order: on Android it
+        // follows when files were added to the device (copied or restored
+        // galleries all share one date), not when they were taken.
+        // Sort a copy: the repository may hand back an unmodifiable list.
+        _library = List.of(results[0] as List<AssetEntity>)
+          ..sort((a, b) => b.createDateTime.compareTo(a.createDateTime));
+        _screenshotIds = results[1] as Set<String>;
+        _byId = {for (final a in _library) a.id: a};
+        _pruneStale();
+        _buildDecks();
+        loadState = LoadState.ready;
+        loadError = null;
+        break;
+      }
     } catch (e, st) {
       debugPrint('Library load failed: $e\n$st');
       loadError = e;
       if (loadState != LoadState.ready) loadState = LoadState.error;
     } finally {
-      _refreshing = false;
-      notifyListeners();
+      _notify();
     }
   }
 
-  /// Drop decisions for assets that no longer exist (deleted elsewhere).
-  void _pruneMissing() {
-    final trashBefore = _trash.length;
-    _trash.removeWhere((id) => !_byId.containsKey(id));
-    _trashSet = _trash.toSet();
-    final keptBefore = _kept.length;
-    _kept.removeWhere((id) => !_byId.containsKey(id));
-    if (_trash.length != trashBefore || _kept.length != keptBefore) {
-      _scheduleSave();
+  static int _stampOf(AssetEntity a) => a.createDateSecond ?? 0;
+
+  /// Drops decisions that no longer apply: the asset was deleted elsewhere,
+  /// or its ID now belongs to a different photo.
+  void _pruneStale() {
+    var changed = false;
+    bool stale(String id) {
+      final asset = _byId[id];
+      if (asset == null) return true;
+      final stamp = _stamps[id];
+      if (stamp == null) {
+        // Saved by a version that stored no fingerprint: adopt this one.
+        _stamps[id] = _stampOf(asset);
+        changed = true;
+        return false;
+      }
+      return stamp != _stampOf(asset);
     }
+
+    final gone = {..._kept.where(stale), ..._trash.where(stale)};
+    if (gone.isNotEmpty) {
+      _kept.removeAll(gone);
+      _trash.removeWhere(gone.contains);
+      _trashSet.removeAll(gone);
+      gone.forEach(_stamps.remove);
+      changed = true;
+    }
+    if (changed) _scheduleSave();
   }
 
   void _buildDecks() {
@@ -256,22 +318,27 @@ class AppController extends ChangeNotifier {
   // ------------------------------------------------------------- decisions
 
   void decide(AssetEntity asset, Decision decision) {
+    _stamps[asset.id] = _stampOf(asset);
     if (decision == Decision.keep) {
+      // One decision per asset: keeping takes it out of the bin.
+      if (_trashSet.remove(asset.id)) _trash.remove(asset.id);
       _kept.add(asset.id);
     } else {
+      _kept.remove(asset.id);
       _trash.remove(asset.id);
       _trash.add(asset.id);
       _trashSet.add(asset.id);
     }
     _scheduleSave();
-    notifyListeners();
+    _notify();
   }
 
   void undo(AssetEntity asset) {
     _kept.remove(asset.id);
     if (_trashSet.remove(asset.id)) _trash.remove(asset.id);
+    _stamps.remove(asset.id);
     _scheduleSave();
-    notifyListeners();
+    _notify();
   }
 
   /// Take items out of the bin without deciding on them again: they count as
@@ -280,26 +347,57 @@ class AppController extends ChangeNotifier {
     for (final id in ids) {
       if (_trashSet.remove(id)) _trash.remove(id);
       _kept.add(id);
+      final asset = _byId[id];
+      if (asset != null) _stamps[id] ??= _stampOf(asset);
     }
     _scheduleSave();
-    notifyListeners();
+    _notify();
   }
 
   Future<DeleteOutcome> deleteForever(List<AssetEntity> assets) async {
-    final bytes = {for (final a in assets) a.id: await repo.fileSize(a)};
+    final sizes = await Future.wait(assets.map(repo.fileSize));
+    final bytes = {
+      for (var i = 0; i < assets.length; i++) assets[i].id: sizes[i],
+    };
+    final inTrash = await repo.deletesGoToTrash;
     final deleted = (await repo.delete(assets)).toSet();
     if (deleted.isEmpty) return const DeleteOutcome(count: 0, bytes: 0);
 
     final freed = deleted.fold<int>(0, (sum, id) => sum + (bytes[id] ?? 0));
+    _epoch++;
     _trash.removeWhere(deleted.contains);
     _trashSet.removeAll(deleted);
+    _kept.removeAll(deleted);
+    deleted.forEach(_stamps.remove);
     _library = _library.where((a) => !deleted.contains(a.id)).toList();
     _byId = {for (final a in _library) a.id: a};
     _buildDecks();
-    await store.addFreed(bytes: freed, count: deleted.length);
     _scheduleSave();
-    notifyListeners();
-    return DeleteOutcome(count: deleted.length, bytes: freed);
+    if (inTrash) {
+      // These files sit in the system trash until it is emptied. Their size
+      // is counted as freed now; remember them so that emptying the trash
+      // from storage cleanup doesn't count them again.
+      await store.rememberTrashed([
+        for (final a in assets)
+          if (deleted.contains(a.id) && a.title != null) a.title!,
+      ]);
+    }
+    await recordFreed(bytes: freed, items: deleted.length);
+    return DeleteOutcome(count: deleted.length, bytes: freed, inTrash: inTrash);
+  }
+
+  /// Adds to the lifetime stats and refreshes whatever is showing them.
+  Future<void> recordFreed({required int bytes, int items = 0}) async {
+    if (bytes <= 0 && items <= 0) return;
+    await store.addFreed(bytes: bytes < 0 ? 0 : bytes, count: items);
+    _notify();
+  }
+
+  /// Files were removed behind the photo library's back (storage cleanup):
+  /// re-read it so deleted photos and videos leave the decks.
+  Future<void> refreshAfterFileChanges() {
+    _epoch++;
+    return load(quiet: true);
   }
 
   /// Forgets every decision in [deck] so its items come back to be swiped
@@ -312,21 +410,27 @@ class AppController extends ChangeNotifier {
       final wasKept = _kept.remove(a.id);
       final wasBinned = _trashSet.remove(a.id);
       if (wasBinned) _trash.remove(a.id);
-      if (wasKept || wasBinned) count++;
+      if (wasKept || wasBinned) {
+        _stamps.remove(a.id);
+        count++;
+      }
     }
     if (count > 0) {
       _scheduleSave();
-      notifyListeners();
+      _notify();
     }
     return count;
   }
 
   Future<void> resetProgress() async {
+    _saveTimer?.cancel();
+    _saveTimer = null;
     _kept.clear();
     _trash.clear();
     _trashSet.clear();
+    _stamps.clear();
     await store.resetProgress();
-    notifyListeners();
+    _notify();
   }
 
   // ----------------------------------------------------------- persistence
@@ -339,11 +443,21 @@ class AppController extends ChangeNotifier {
   Future<void> flush() async {
     _saveTimer?.cancel();
     _saveTimer = null;
-    await Future.wait([store.saveKept(_kept), store.saveTrash(_trash)]);
+    String encode(String id) => DecisionStore.encode(id, _stamps[id]);
+    await Future.wait([
+      store.saveKept(_kept.map(encode)),
+      store.saveTrash(_trash.map(encode)),
+    ]);
+  }
+
+  /// Async work can finish after the controller is gone.
+  void _notify() {
+    if (!_disposed) notifyListeners();
   }
 
   @override
   void dispose() {
+    _disposed = true;
     _saveTimer?.cancel();
     super.dispose();
   }

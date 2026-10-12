@@ -92,6 +92,31 @@ void main() {
     expect(find.byKey(const Key('card-a2')), findsOneWidget);
   });
 
+  testWidgets('a drag during the first-run demo takes over at once', (
+    tester,
+  ) async {
+    final ctrl = SwipeDeckController();
+    final decided = await pumpDeck(tester, ctrl);
+    ctrl.demo();
+    await tester.pump(const Duration(milliseconds: 700)); // mid-wiggle
+    expect(ctrl.isAnimating, isTrue);
+
+    await tester.drag(find.byKey(const Key('card-a0')), const Offset(-260, 0));
+    await tester.pumpAndSettle();
+    expect(decided, [('a0', Decision.delete)]);
+  });
+
+  testWidgets('a button press during the demo is not ignored', (tester) async {
+    final ctrl = SwipeDeckController();
+    final decided = await pumpDeck(tester, ctrl);
+    ctrl.demo();
+    await tester.pump(const Duration(milliseconds: 700));
+
+    ctrl.swipe(Decision.keep);
+    await tester.pumpAndSettle();
+    expect(decided, [('a0', Decision.keep)]);
+  });
+
   testWidgets('a card keeps its state when it moves to the front', (
     tester,
   ) async {

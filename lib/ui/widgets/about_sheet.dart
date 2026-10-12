@@ -25,105 +25,81 @@ Future<void> _open(BuildContext context, String url) async {
 
 Future<void> showAboutSheet(BuildContext context) {
   final p = Palette.of(context);
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: Colors.transparent,
-    builder: (sheet) => Container(
-      margin: const EdgeInsets.all(12),
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-      decoration: BoxDecoration(
-        color: p.surface,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 22),
-              decoration: BoxDecoration(
-                color: p.stroke,
-                borderRadius: BorderRadius.circular(2),
+  return showAppSheet<void>(
+    context,
+    builder: (sheet) => Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: Image.asset('assets/brand/logo.png', width: 76, height: 76),
+        ),
+        const SizedBox(height: 14),
+        Text('GalleryShift', style: AppText.title(color: p.text)),
+        const SizedBox(height: 4),
+        Text(
+          'Swipe your gallery clean.',
+          style: AppText.label(color: p.textDim),
+        ),
+        const SizedBox(height: 24),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: p.surfaceHigh,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            children: [
+              Text(
+                'DESIGNED & DEVELOPED BY',
+                style: AppText.overline(color: p.textFaint),
               ),
-            ),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(22),
-              child: Image.asset(
-                'assets/brand/logo.png',
-                width: 76,
-                height: 76,
+              const SizedBox(height: 6),
+              Text(
+                Developer.name,
+                style: AppText.headline(color: p.text).copyWith(fontSize: 20),
               ),
-            ),
-            const SizedBox(height: 14),
-            Text('GalleryShift', style: AppText.title(color: p.text)),
-            const SizedBox(height: 4),
-            Text(
-              'Swipe your gallery clean.',
-              style: AppText.label(color: p.textDim),
-            ),
-            const SizedBox(height: 24),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: p.surfaceHigh,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
+              const SizedBox(height: 16),
+              Row(
                 children: [
-                  Text(
-                    'DESIGNED & DEVELOPED BY',
-                    style: AppText.overline(color: p.textFaint),
+                  Expanded(
+                    child: _LinkButton(
+                      icon: Icons.code_rounded,
+                      label: 'GitHub',
+                      detail: Developer.github,
+                      onTap: () => _open(context, Developer.github),
+                    ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    Developer.name,
-                    style: AppText.headline(color: p.text)
-                        .copyWith(fontSize: 20),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _LinkButton(
-                          icon: Icons.code_rounded,
-                          label: 'GitHub',
-                          detail: Developer.github,
-                          onTap: () => _open(context, Developer.github),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _LinkButton(
-                          icon: Icons.facebook_rounded,
-                          label: 'Facebook',
-                          detail: Developer.facebook,
-                          onTap: () => _open(context, Developer.facebook),
-                        ),
-                      ),
-                    ],
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _LinkButton(
+                      icon: Icons.facebook_rounded,
+                      label: 'Facebook',
+                      detail: Developer.facebook,
+                      onTap: () => _open(context, Developer.facebook),
+                    ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.lock_rounded, size: 14, color: p.textFaint),
-                const SizedBox(width: 6),
-                Text(
-                  'Your photos never leave your phone.',
-                  style: AppText.caption(color: p.textFaint),
-                ),
-              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.lock_rounded, size: 14, color: p.textFaint),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                'Your photos never leave your phone.',
+                style: AppText.caption(color: p.textFaint),
+              ),
             ),
           ],
         ),
-      ),
+      ],
     ),
   );
 }

@@ -59,107 +59,83 @@ Future<void> showDeckSheet(
   required VoidCallback onOpen,
 }) {
   final p = Palette.of(context);
-  return showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: Colors.transparent,
+  return showAppSheet<void>(
+    context,
     builder: (sheet) {
       final app = AppScope.of(sheet);
       final total = deck.assets.length;
       final left = app.remainingCount(deck);
       final decided = total - left;
       final cover = app.coverFor(deck);
-      return Container(
-        margin: const EdgeInsets.all(12),
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        decoration: BoxDecoration(
-          color: p.surface,
-          borderRadius: BorderRadius.circular(28),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
             children: [
-              Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 18),
-                decoration: BoxDecoration(
-                  color: p.stroke,
-                  borderRadius: BorderRadius.circular(2),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: SizedBox.square(
+                  dimension: 64,
+                  child: cover == null
+                      ? ColoredBox(color: p.surfaceHigh)
+                      : AssetThumb(asset: cover, size: 200),
                 ),
               ),
-              Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: SizedBox.square(
-                      dimension: 64,
-                      child: cover == null
-                          ? ColoredBox(color: p.surfaceHigh)
-                          : AssetThumb(asset: cover, size: 200),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(deckName(deck), style: AppText.title(color: p.text)),
+                    const SizedBox(height: 4),
+                    Text(
+                      left == 0
+                          ? 'All ${formatCount(total)} sorted'
+                          : '${formatCount(decided)} of ${formatCount(total)} sorted',
+                      style: AppText.label(color: p.textDim),
                     ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          deckName(deck),
-                          style: AppText.title(color: p.text),
+                    const SizedBox(height: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: total == 0 ? 1 : decided / total,
+                        minHeight: 4,
+                        backgroundColor: p.surfaceHigh,
+                        valueColor: AlwaysStoppedAnimation(
+                          left == 0 ? p.keep : p.accent,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          left == 0
-                              ? 'All ${formatCount(total)} sorted'
-                              : '${formatCount(decided)} of ${formatCount(total)} sorted',
-                          style: AppText.label(color: p.textDim),
-                        ),
-                        const SizedBox(height: 10),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(2),
-                          child: LinearProgressIndicator(
-                            value: total == 0 ? 1 : decided / total,
-                            minHeight: 4,
-                            backgroundColor: p.surfaceHigh,
-                            valueColor: AlwaysStoppedAnimation(
-                              left == 0 ? p.keep : p.accent,
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 22),
-              if (left > 0) ...[
-                PrimaryButton(
-                  label: decided == 0
-                      ? 'Start swiping'
-                      : 'Continue · ${formatCount(left)} left',
-                  icon: Icons.swipe_rounded,
-                  onTap: () {
-                    Navigator.pop(sheet);
-                    onOpen();
-                  },
-                ),
-                const SizedBox(height: 10),
-              ],
-              if (decided > 0)
-                SecondaryButton(
-                  label: 'Review again',
-                  icon: Icons.restart_alt_rounded,
-                  onTap: () async {
-                    Navigator.pop(sheet);
-                    final reset = await confirmReviewAgain(context, deck);
-                    if (reset && context.mounted) onOpen();
-                  },
-                ),
             ],
           ),
-        ),
+          const SizedBox(height: 22),
+          if (left > 0) ...[
+            PrimaryButton(
+              label: decided == 0
+                  ? 'Start swiping'
+                  : 'Continue · ${formatCount(left)} left',
+              icon: Icons.swipe_rounded,
+              onTap: () {
+                Navigator.pop(sheet);
+                onOpen();
+              },
+            ),
+            const SizedBox(height: 10),
+          ],
+          if (decided > 0)
+            SecondaryButton(
+              label: 'Review again',
+              icon: Icons.restart_alt_rounded,
+              onTap: () async {
+                Navigator.pop(sheet);
+                final reset = await confirmReviewAgain(context, deck);
+                if (reset && context.mounted) onOpen();
+              },
+            ),
+        ],
       );
     },
   );

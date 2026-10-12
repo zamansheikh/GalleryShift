@@ -59,7 +59,7 @@ class HomeScreen extends StatelessWidget {
                   _Greeting(),
                   const SizedBox(height: 20),
                   loading
-                      ? const _Skeleton(height: 168, radius: 28)
+                      ? const _Skeleton(height: 214, radius: 28)
                       : _HeroCard(app: app),
                   if (app.trashCount > 0) ...[
                     const SizedBox(height: 14),
@@ -153,7 +153,6 @@ class HomeScreen extends StatelessWidget {
             ),
             if (!loading && app.libraryCount == 0)
               const SliverToBoxAdapter(child: _EmptyLibrary()),
-            const SliverToBoxAdapter(child: _Credit()),
           ],
         ),
       ),
@@ -198,69 +197,49 @@ class _Header extends StatelessWidget {
 
   void _showSettings(BuildContext context, AppController app) {
     final p = Palette.of(context);
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        margin: const EdgeInsets.all(12),
-        padding: const EdgeInsets.fromLTRB(8, 12, 8, 12),
-        decoration: BoxDecoration(
-          color: p.surface,
-          borderRadius: BorderRadius.circular(28),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 10),
-                decoration: BoxDecoration(
-                  color: p.stroke,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              if (app.isLimited)
-                _SheetItem(
-                  icon: Icons.photo_library_outlined,
-                  label: 'Choose more photos',
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    app.repo.presentLimitedPicker();
-                  },
-                ),
-              _SheetItem(
-                icon: Icons.info_outline_rounded,
-                label: 'About GalleryShift',
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  showAboutSheet(context);
-                },
-              ),
-              _SheetItem(
-                icon: Icons.refresh_rounded,
-                label: 'Rescan library',
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  app.load();
-                },
-              ),
-              _SheetItem(
-                icon: Icons.restart_alt_rounded,
-                label: 'Start over',
-                detail: 'Forget every keep and delete decision',
-                color: p.delete,
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  final ok = await _confirmReset(context);
-                  if (ok == true) await app.resetProgress();
-                },
-              ),
-            ],
+    showAppSheet<void>(
+      context,
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+      builder: (sheetContext) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (app.isLimited)
+            _SheetItem(
+              icon: Icons.photo_library_outlined,
+              label: 'Choose more photos',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                app.repo.presentLimitedPicker();
+              },
+            ),
+          _SheetItem(
+            icon: Icons.info_outline_rounded,
+            label: 'About GalleryShift',
+            onTap: () {
+              Navigator.pop(sheetContext);
+              showAboutSheet(context);
+            },
           ),
-        ),
+          _SheetItem(
+            icon: Icons.refresh_rounded,
+            label: 'Rescan library',
+            onTap: () {
+              Navigator.pop(sheetContext);
+              app.load();
+            },
+          ),
+          _SheetItem(
+            icon: Icons.restart_alt_rounded,
+            label: 'Start over',
+            detail: 'Forget every keep and delete decision',
+            color: p.delete,
+            onTap: () async {
+              Navigator.pop(sheetContext);
+              final ok = await _confirmReset(context);
+              if (ok == true) await app.resetProgress();
+            },
+          ),
+        ],
       ),
     );
   }
@@ -376,61 +355,75 @@ class _HeroCard extends StatelessWidget {
           ],
         ),
       ),
-      child: Row(
+      // Stats sit on their own row: beside the ring they don't fit on a
+      // 360dp-wide phone.
+      child: Column(
         children: [
-          ProgressRing(
-            value: app.progress,
-            size: 112,
-            stroke: 11,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '$pct%',
-                  style: AppText.title(color: p.text).copyWith(fontSize: 26),
-                ),
-                Text('reviewed', style: AppText.caption(color: p.textDim)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${formatCount(app.reviewedCount)} of ${formatCount(app.libraryCount)}',
-                  style: AppText.headline(color: p.text),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'photos & videos sorted',
-                  style: AppText.caption(color: p.textDim),
-                ),
-                const SizedBox(height: 16),
-                Row(
+          Row(
+            children: [
+              ProgressRing(
+                value: app.progress,
+                size: 96,
+                stroke: 10,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: _MiniStat(
-                        icon: Icons.bolt_rounded,
-                        value: formatBytes(app.freedBytes),
-                        label: 'Freed',
-                        color: p.keep,
-                      ),
+                    Text(
+                      '$pct%',
+                      style: AppText.title(color: p.text)
+                          .copyWith(fontSize: 22),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _MiniStat(
-                        icon: Icons.delete_rounded,
-                        value: formatCount(app.deletedCount),
-                        label: 'Deleted',
-                        color: p.delete,
-                      ),
+                    Text(
+                      'reviewed',
+                      style: AppText.w(11, FontWeight.w600, color: p.textDim),
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${formatCount(app.reviewedCount)} of ${formatCount(app.libraryCount)}',
+                        style: AppText.title(color: p.text),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'photos & videos sorted',
+                      style: AppText.label(color: p.textDim),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _MiniStat(
+                  icon: Icons.bolt_rounded,
+                  value: formatBytes(app.freedBytes),
+                  label: 'Freed',
+                  color: p.keep,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _MiniStat(
+                  icon: Icons.delete_rounded,
+                  value: formatCount(app.deletedCount),
+                  label: 'Deleted',
+                  color: p.delete,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -455,10 +448,10 @@ class _MiniStat extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
       decoration: BoxDecoration(
         color: p.bg.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -467,7 +460,14 @@ class _MiniStat extends StatelessWidget {
             children: [
               Icon(icon, size: 13, color: color),
               const SizedBox(width: 4),
-              Text(label, style: AppText.caption(color: p.textDim)),
+              Flexible(
+                child: Text(
+                  label,
+                  style: AppText.caption(color: p.textDim),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 3),
@@ -776,24 +776,27 @@ class _MonthTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Flexible(
-                        child: Text(
+                  // Shrink to fit rather than cut "September" short on
+                  // narrow screens or with large text.
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
                           deck.title,
                           style: AppText.headline(color: p.text)
                               .copyWith(fontSize: 15),
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        deck.subtitle,
-                        style: AppText.caption(color: p.textFaint),
-                      ),
-                    ],
+                        const SizedBox(width: 5),
+                        Text(
+                          deck.subtitle,
+                          style: AppText.caption(color: p.textFaint),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 8),
                   ClipRRect(
@@ -927,45 +930,6 @@ class _ErrorState extends StatelessWidget {
                 onTap: onRetry,
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Quiet developer credit at the end of the home screen; opens About.
-class _Credit extends StatelessWidget {
-  const _Credit();
-
-  @override
-  Widget build(BuildContext context) {
-    final p = Palette.of(context);
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        0,
-        20,
-        24 + MediaQuery.paddingOf(context).bottom,
-      ),
-      child: Center(
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => showAboutSheet(context),
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Text.rich(
-              TextSpan(
-                style: AppText.caption(color: p.textFaint),
-                children: [
-                  const TextSpan(text: 'Made by '),
-                  TextSpan(
-                    text: Developer.name,
-                    style: AppText.caption(color: p.textDim),
-                  ),
-                ],
-              ),
-            ),
           ),
         ),
       ),

@@ -6,6 +6,7 @@ import 'package:photo_manager/photo_manager.dart';
 
 import '../../state/app_controller.dart';
 import '../../state/app_scope.dart';
+import '../../state/storage_cleaner.dart';
 import '../../theme/app_theme.dart';
 import '../../util/format.dart';
 import '../widgets/common.dart';
@@ -25,6 +26,23 @@ class ReviewScreen extends StatefulWidget {
 class _ReviewScreenState extends State<ReviewScreen> {
   /// Items the user tapped to keep after all.
   final Set<String> _rescued = {};
+  late final Future<bool> _toTrash = AppScope.read(context)
+      .repo
+      .deletesGoToTrash;
+
+  /// What deleting means here. Only Android 10 and older has no safety net.
+  static String _afterDelete(bool? toTrash) {
+    if (Platform.isIOS) {
+      return 'Deleted items stay in Recently Deleted for 30 days.';
+    }
+    return switch (toTrash) {
+      true => 'Deleted items stay in your phone\u2019s trash for 30 days.',
+      false =>
+        'On this version of Android, deleted items are removed for good.',
+      null => '',
+    };
+  }
+
   bool _deleting = false;
   Future<int>? _sizeFuture;
   int _sizeFor = -1;
@@ -54,6 +72,12 @@ class _ReviewScreenState extends State<ReviewScreen> {
   }
 
   Future<void> _delete(AppController app, List<AssetEntity> toDelete) async {
+    // Android 10 and older delete at once: no system prompt, no trash.
+    // Everywhere else the system asks, so only ask here in that case.
+    if (Platform.isAndroid && !await _toTrash) {
+      if (!mounted || !await _confirmPermanent(toDelete.length)) return;
+      if (!mounted) return;
+    }
     setState(() => _deleting = true);
     try {
       final outcome = await app.deleteForever(toDelete);
@@ -67,16 +91,47 @@ class _ReviewScreenState extends State<ReviewScreen> {
         _rescued.clear();
       }
       HapticFeedback.heavyImpact();
-      await showModalBottomSheet<void>(
-        context: context,
-        backgroundColor: Colors.transparent,
+      await showAppSheet<void>(
+        context,
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
         builder: (_) => _SuccessSheet(outcome: outcome),
       );
     } catch (e) {
-      if (mounted) _snack('Could not delete: $e');
+      debugPrint('Bin delete failed: $e');
+      if (mounted) _snack('Couldn\u2019t delete. Please try again.');
     } finally {
       if (mounted) setState(() => _deleting = false);
     }
+  }
+
+  Future<bool> _confirmPermanent(int count) async {
+    final p = Palette.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: p.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          'Delete ${plural(count, 'item')}?',
+          style: AppText.title(color: p.text),
+        ),
+        content: Text(
+          'On this version of Android they are removed for good and can\u2019t be recovered.',
+          style: AppText.body(color: p.textDim),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: Text('Cancel', style: AppText.label(color: p.textDim)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: Text('Delete', style: AppText.label(color: p.delete)),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
   }
 
   void _snack(String text) {
@@ -150,10 +205,13 @@ class _ReviewScreenState extends State<ReviewScreen> {
                                   20,
                                   16,
                                 ),
-                                child: _InfoNote(
-                                  text: Platform.isIOS
-                                      ? 'Tap anything you want to keep. Deleted items stay in Recently Deleted for 30 days.'
-                                      : 'Tap anything you want to keep. Deleted items go to your device\'s trash where supported.',
+                                child: FutureBuilder<bool>(
+                                  future: _toTrash,
+                                  builder: (context, snap) => _InfoNote(
+                                    text:
+                                        'Tap anything you want to keep. '
+                                        '${_afterDelete(snap.data)}',
+                                  ),
                                 ),
                               ),
                             ),
@@ -487,59 +545,53 @@ class _SuccessSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
-    return Container(
-      margin: const EdgeInsets.all(12),
-      padding: EdgeInsets.fromLTRB(
-        24,
-        28,
-        24,
-        20 + MediaQuery.paddingOf(context).bottom * 0.5,
-      ),
-      decoration: BoxDecoration(
-        color: p.surface,
-        borderRadius: BorderRadius.circular(32),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: 1),
-            duration: const Duration(milliseconds: 650),
-            curve: Curves.elasticOut,
-            builder: (context, v, child) =>
-                Transform.scale(scale: v, child: child),
-            child: Container(
-              width: 84,
-              height: 84,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: p.keep.withValues(alpha: 0.15),
-              ),
-              child: Icon(Icons.check_rounded, size: 44, color: p.keep),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 650),
+          curve: Curves.elasticOut,
+          builder: (context, v, child) =>
+              Transform.scale(scale: v, child: child),
+          child: Container(
+            width: 84,
+            height: 84,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: p.keep.withValues(alpha: 0.15),
             ),
+            child: Icon(Icons.check_rounded, size: 44, color: p.keep),
           ),
-          const SizedBox(height: 20),
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0, end: outcome.bytes.toDouble()),
-            duration: const Duration(milliseconds: 1100),
-            curve: Curves.easeOutCubic,
-            builder: (context, v, _) => Text(
-              formatBytes(v.round()),
-              style: AppText.display(color: p.text),
-            ),
+        ),
+        const SizedBox(height: 20),
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: outcome.bytes.toDouble()),
+          duration: const Duration(milliseconds: 1100),
+          curve: Curves.easeOutCubic,
+          builder: (context, v, _) => Text(
+            formatBytes(v.round()),
+            style: AppText.display(color: p.text),
           ),
-          const SizedBox(height: 6),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'freed from ${plural(outcome.count, 'item')}',
+          style: AppText.body(color: p.textDim),
+        ),
+        if (outcome.inTrash) ...[
+          const SizedBox(height: 14),
+          // On Android the space only comes back when the trash empties.
           Text(
-            'freed from ${plural(outcome.count, 'item')}',
-            style: AppText.body(color: p.textDim),
-          ),
-          const SizedBox(height: 26),
-          PrimaryButton(
-            label: 'Done',
-            onTap: () => Navigator.of(context).pop(),
+            'They stay in your phone\u2019s trash for 30 days.'
+            '${StorageCleaner.supported ? ' Storage cleanup can empty it sooner.' : ''}',
+            textAlign: TextAlign.center,
+            style: AppText.caption(color: p.textFaint),
           ),
         ],
-      ),
+        const SizedBox(height: 26),
+        PrimaryButton(label: 'Done', onTap: () => Navigator.of(context).pop()),
+      ],
     );
   }
 }

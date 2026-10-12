@@ -79,6 +79,14 @@ class StorageScanner {
     'recordings', 'ringtones',
   };
 
+  /// Well-known folders the camera and system write to. Harmless to remove
+  /// when empty, but alarming to see offered for deletion.
+  static const _protectedFolders = {
+    'dcim/camera',
+    'dcim/screenshots',
+    'pictures/screenshots',
+  };
+
   static const _documentExt = {
     'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', //
     'odp', 'rtf', 'txt', 'csv', 'md', 'epub', 'mobi', 'pages', 'numbers',
@@ -87,8 +95,10 @@ class StorageScanner {
 
   static const _installerExt = {'apk', 'apks', 'xapk', 'apkm'};
 
-  static const _tempExt = {
-    'tmp', 'temp', 'log', 'crdownload', 'part', 'partial', 'download', //
+  /// Temp files and half-finished downloads. Junk only once they have sat
+  /// untouched for a day: a fresh one may be a download still in progress.
+  static const _partialExt = {
+    'tmp', 'temp', 'crdownload', 'part', 'partial', 'download', //
   };
 
   static const _osLitter = {'thumbs.db', '.ds_store', 'desktop.ini'};
@@ -160,7 +170,9 @@ class StorageScanner {
             inThumbs: inThumbs || name == '.thumbnails',
           );
           if (childEmpty) {
-            if (_reportable(name, isRoot)) emptyChildren.add(e.path);
+            if (_reportable(e.path, name, root, isRoot)) {
+              emptyChildren.add(e.path);
+            }
           } else {
             isEmpty = false;
           }
@@ -195,12 +207,13 @@ class StorageScanner {
     );
   }
 
-  bool _reportable(String name, bool isRoot) {
+  bool _reportable(String path, String name, String root, bool isRoot) {
     if (name.startsWith('.')) return false; // Hidden: often an app's marker.
     if (isRoot && _protectedTopLevel.contains(name.toLowerCase())) {
       return false;
     }
-    return true;
+    final relative = path.substring(root.length + 1).toLowerCase();
+    return !_protectedFolders.contains(relative);
   }
 
   JunkKind? _junkKind(
@@ -216,20 +229,30 @@ class StorageScanner {
     if (lower.startsWith('.pending-') && modified.isBefore(staleBefore)) {
       return JunkKind.trashLeftover;
     }
-    // Only the cached images themselves; hidden files there are the media
-    // provider's bookkeeping.
+    // Gallery apps' thumbnail databases (`.thumbdata…`), often gigabytes.
+    if (lower.startsWith('.thumbdata')) return JunkKind.thumbnailCache;
+    // Only the cached images themselves; other hidden files there are the
+    // media provider's bookkeeping.
     if (inThumbnails && !lower.startsWith('.')) return JunkKind.thumbnailCache;
     final dot = lower.lastIndexOf('.');
     final ext = dot <= 0 ? '' : lower.substring(dot + 1);
     if (_installerExt.contains(ext)) return JunkKind.installer;
-    if (_tempExt.contains(ext) ||
-        _osLitter.contains(lower) ||
-        lower.startsWith('._')) {
+    if (ext == 'log' || _osLitter.contains(lower) || lower.startsWith('._')) {
+      return JunkKind.tempAndLogs;
+    }
+    if (_partialExt.contains(ext) && modified.isBefore(staleBefore)) {
       return JunkKind.tempAndLogs;
     }
     return null;
   }
 }
+
+final _trashedName = RegExp(r'^\.trashed-\d+-(.+)$', caseSensitive: false);
+
+/// The original name of a file Android renamed on moving it to the trash
+/// (`.trashed-<expiry>-<name>`), or null if [fileName] isn't one.
+String? trashedOriginalName(String fileName) =>
+    _trashedName.firstMatch(fileName)?.group(1);
 
 class DeleteReport {
   const DeleteReport({

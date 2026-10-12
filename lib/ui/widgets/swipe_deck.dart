@@ -70,6 +70,10 @@ class _SwipeDeckState extends State<SwipeDeck>
   Curve _curve = Curves.linear;
   bool _grabbedTop = true;
   bool _busy = false;
+
+  /// The first-run wiggle is playing. Unlike a real swipe it must never
+  /// block the user: any drag or button press cancels it.
+  bool _demoing = false;
   bool _pastThreshold = false;
   Size _size = Size.zero;
 
@@ -148,6 +152,7 @@ class _SwipeDeckState extends State<SwipeDeck>
     required Offset velocity,
     bool fromButton = false,
   }) async {
+    _cancelDemo();
     if (_busy || widget.index >= widget.items.length) return;
     _busy = true;
     final sign = d == Decision.keep ? 1.0 : -1.0;
@@ -188,27 +193,39 @@ class _SwipeDeckState extends State<SwipeDeck>
   Future<void> _demo() async {
     if (_busy || widget.index >= widget.items.length) return;
     _busy = true;
+    _demoing = true;
     _grabbedTop = true;
     const d = Duration(milliseconds: 520);
+    bool stopped() => !mounted || !_demoing;
+
     await Future<void>.delayed(const Duration(milliseconds: 450));
-    if (!mounted) return;
+    if (stopped()) return;
     await _animateTo(Offset(_threshold * 0.9, 0), d, Curves.easeInOutCubic);
     await Future<void>.delayed(const Duration(milliseconds: 250));
-    if (!mounted) return;
+    if (stopped()) return;
     await _animateTo(
       Offset(-_threshold * 0.9, 0),
       d * 1.4,
       Curves.easeInOutCubic,
     );
     await Future<void>.delayed(const Duration(milliseconds: 250));
-    if (!mounted) return;
+    if (stopped()) return;
     await _animateTo(Offset.zero, d, Curves.easeOutCubic);
+    if (stopped()) return;
+    _demoing = false;
     _busy = false;
   }
 
-  // -------------------------------------------------------------- gestures
+  /// Hands control back to the user mid-demo, leaving the card where it is.
+  void _cancelDemo() {
+    if (!_demoing) return;
+    _demoing = false;
+    _busy = false;
+    _anim.stop();
+  }
 
   void _onPanStart(DragStartDetails d) {
+    _cancelDemo();
     if (_busy) return;
     _anim.stop();
     _grabbedTop = d.localPosition.dy < _size.height / 2;

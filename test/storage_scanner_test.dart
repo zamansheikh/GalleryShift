@@ -29,7 +29,9 @@ void main() {
     file('Pictures/.pending-1790000000-new.jpg', modified: old);
     file('Pictures/.pending-1790000000-writing-now.jpg'); // fresh: in use
     file('Download/whatsapp.apk');
-    file('Download/movie.mp4.crdownload');
+    file('Download/movie.mp4.crdownload', modified: old);
+    file('Download/downloading-now.zip.part'); // fresh: maybe in progress
+    file('DCIM/.thumbnails/.thumbdata3--1967290299');
     file('Documents/app.log');
     file('Documents/._resource');
     file('DCIM/.thumbnails/123.jpg');
@@ -43,6 +45,7 @@ void main() {
       'Pictures/.pending-1790000000-new.jpg': JunkKind.trashLeftover,
       'Download/whatsapp.apk': JunkKind.installer,
       'Download/movie.mp4.crdownload': JunkKind.tempAndLogs,
+      'DCIM/.thumbnails/.thumbdata3--1967290299': JunkKind.thumbnailCache,
       'Documents/app.log': JunkKind.tempAndLogs,
       'Documents/._resource': JunkKind.tempAndLogs,
       'DCIM/.thumbnails/123.jpg': JunkKind.thumbnailCache,
@@ -89,6 +92,8 @@ void main() {
     dir('Photos/Kept');
     file('Photos/keep.jpg');
     dir('Android/data/some.app/cache'); // never touched
+    dir('DCIM/Camera'); // the camera's folder: keep even when empty
+    dir('Pictures/Screenshots');
 
     final r = scanner.scan(root.path);
     expect(r.emptyFolders.map(rel).toSet(), {
@@ -105,6 +110,16 @@ void main() {
     final r = scanner.scan(root.path);
     expect(r.largeFiles, isEmpty);
     expect(r.junk, isEmpty);
+  });
+
+  test('trashedOriginalName reads Android trash names', () {
+    expect(
+      trashedOriginalName('.trashed-1790000000-IMG_2041.jpg'),
+      'IMG_2041.jpg',
+    );
+    expect(trashedOriginalName('.trashed-1790000000-a-b-c.mp4'), 'a-b-c.mp4');
+    expect(trashedOriginalName('IMG_2041.jpg'), isNull);
+    expect(trashedOriginalName('.pending-1790000000-new.jpg'), isNull);
   });
 
   test('deletePermanently removes files and still-empty folders', () async {

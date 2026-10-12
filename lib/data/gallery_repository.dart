@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 /// Thin wrapper over photo_manager: permission, loading, sizes, deletion.
@@ -93,6 +94,11 @@ class GalleryRepository {
     return sizes.fold<int>(0, (a, b) => a + b);
   }
 
+  /// Whether [delete] moves items to a trash that still occupies storage
+  /// until it is emptied (Android 11+), rather than removing them.
+  Future<bool> get deletesGoToTrash async =>
+      Platform.isAndroid && await _androidSdk() >= 30;
+
   /// Deletes via the system. Returns the IDs actually removed — empty if the
   /// user cancelled the system prompt.
   ///
@@ -100,10 +106,31 @@ class GalleryRepository {
   /// moves to Recently Deleted.
   Future<List<String>> delete(List<AssetEntity> assets) async {
     if (assets.isEmpty) return const [];
-    if (Platform.isAndroid && await _androidSdk() >= 30) {
-      return PhotoManager.editor.android.moveToTrash(assets);
+    if (!await deletesGoToTrash) {
+      if (Platform.isAndroid && await _androidSdk() == 29) {
+        // Android 10 is only asked for read access up front. Without write
+        // access the system prompts separately for every single photo.
+        // Read is already granted, so this is normally silent.
+        await Permission.storage.request();
+      }
+      return PhotoManager.editor.deleteWithIds(
+        assets.map((a) => a.id).toList(),
+      );
     }
-    return PhotoManager.editor.deleteWithIds(assets.map((a) => a.id).toList());
+    // Android hands the whole list to the system in one binder call, which
+    // fails outright above roughly 1 MB. Send very large bins in batches;
+    // each batch is its own system prompt.
+    const batch = 1000;
+    final done = <String>[];
+    for (var i = 0; i < assets.length; i += batch) {
+      final end = i + batch > assets.length ? assets.length : i + batch;
+      final ids = await PhotoManager.editor.android.moveToTrash(
+        assets.sublist(i, end),
+      );
+      if (ids.isEmpty) break; // The user declined: don't ask again.
+      done.addAll(ids);
+    }
+    return done;
   }
 
   int? _sdk;

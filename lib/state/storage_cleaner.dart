@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -16,27 +17,51 @@ class StorageCleaner extends ChangeNotifier {
   StorageCleaner(this.app);
 
   final AppController app;
-  static const root = '/storage/emulated/0';
   static const _scanner = StorageScanner();
 
   CleanerState state = CleanerState.checking;
   ScanResult? result;
   Duration? scanTook;
-  bool _busy = false;
+
+  /// Whether access is the Android 11+ "All files access" switch in system
+  /// Settings, rather than an ordinary permission prompt (Android 10-).
+  bool usesAllFilesAccess = true;
+
+  /// True while a delete is running, so the UI can stop a second one.
+  bool deleting = false;
+  bool _scanning = false;
+  bool _disposed = false;
 
   static bool get supported => Platform.isAndroid;
 
+  /// The current user's shared storage. `/storage/self/primary` points at
+  /// it for whichever user is running the app (a work profile or second
+  /// user is not `/storage/emulated/0`).
+  static String resolveRoot() {
+    try {
+      final resolved = Directory('/storage/self/primary')
+          .resolveSymbolicLinksSync();
+      if (Directory(resolved).existsSync()) return resolved;
+    } catch (_) {
+      // Fall through to the usual location.
+    }
+    return '/storage/emulated/0';
+  }
+
+  Future<int> _sdk() async =>
+      int.tryParse(await PhotoManager.systemVersion()) ?? 30;
+
   /// Android 11+ has a dedicated "All files access" switch; older versions
   /// use the classic storage permission.
-  Future<Permission> _permission() async {
-    final sdk = int.tryParse(await PhotoManager.systemVersion()) ?? 30;
-    return sdk >= 30 ? Permission.manageExternalStorage : Permission.storage;
-  }
+  Future<Permission> _permission() async => await _sdk() >= 30
+      ? Permission.manageExternalStorage
+      : Permission.storage;
 
   Future<bool> hasAccess() async => (await _permission()).isGranted;
 
   /// Check access, scanning straight away if it's there.
   Future<void> start() async {
+    usesAllFilesAccess = await _sdk() >= 30;
     if (await hasAccess()) {
       await scan();
     } else {
@@ -52,19 +77,19 @@ class StorageCleaner extends ChangeNotifier {
   }
 
   Future<void> scan() async {
-    if (_busy) return;
-    _busy = true;
+    if (_scanning || deleting) return;
+    _scanning = true;
     _set(CleanerState.scanning);
     final watch = Stopwatch()..start();
     try {
-      result = await _scanner.scanInBackground(root);
+      result = await _scanner.scanInBackground(resolveRoot());
       scanTook = watch.elapsed;
       _set(CleanerState.ready);
     } catch (e) {
       debugPrint('Storage scan failed: $e');
       _set(CleanerState.error);
     } finally {
-      _busy = false;
+      _scanning = false;
     }
   }
 
@@ -84,40 +109,85 @@ class StorageCleaner extends ChangeNotifier {
   int bytesIn(StorageCategory c) =>
       filesIn(c).fold(0, (sum, f) => sum + f.size);
 
-  /// Permanently deletes, then drops what's gone from every list.
+  /// Permanently deletes, drops what's gone from every list, and adds the
+  /// space to the lifetime "Freed" total.
   Future<DeleteReport> delete({
     List<FoundFile> files = const [],
     List<String> folders = const [],
   }) async {
-    final report = await deletePermanently(files: files, folders: folders);
-    final r = result;
-    if (r != null && report.deleted.isNotEmpty) {
-      bool gone(FoundFile f) => report.deleted.contains(f.path);
-      r.junk.removeWhere(gone);
-      r.largeFiles.removeWhere(gone);
-      r.documents.removeWhere(gone);
-      r.emptyFolders.removeWhere(report.deleted.contains);
-      notifyListeners();
+    if (deleting) {
+      return const DeleteReport(deleted: {}, failed: 0, bytes: 0);
     }
-    if (report.bytes > 0) {
-      // Counts toward "Freed" on home; the "Deleted" stat stays photos only.
-      await app.store.addFreed(bytes: report.bytes, count: 0);
-    }
-    if (report.deleted.isNotEmpty) {
-      // Drop media-index rows for files that no longer exist, then refresh
-      // the gallery in case photos or videos were among them.
-      try {
-        await PhotoManager.editor.android.removeAllNoExistsAsset();
-      } catch (e) {
-        debugPrint('Media index cleanup failed: $e');
+    deleting = true;
+    _notify();
+    try {
+      final report = await deletePermanently(files: files, folders: folders);
+      final r = result;
+      if (r != null && report.deleted.isNotEmpty) {
+        bool gone(FoundFile f) => report.deleted.contains(f.path);
+        r.junk.removeWhere(gone);
+        r.largeFiles.removeWhere(gone);
+        r.documents.removeWhere(gone);
+        r.emptyFolders.removeWhere(report.deleted.contains);
       }
-      await app.load(quiet: true);
+      // Counts toward "Freed" on home straight away; the "Deleted" stat
+      // stays photos and videos only.
+      await app.recordFreed(bytes: await _newlyFreed(files, report));
+      if (report.deleted.isNotEmpty) unawaited(_syncGallery());
+      return report;
+    } finally {
+      deleting = false;
+      _notify();
     }
-    return report;
+  }
+
+  /// Bytes in [report] that have not been counted as freed before. Files
+  /// this app itself sent to the system trash were counted then, so removing
+  /// their leftovers now must not count them twice.
+  Future<int> _newlyFreed(List<FoundFile> files, DeleteReport report) async {
+    final leftovers = [
+      for (final f in files)
+        if (f.junk == JunkKind.trashLeftover && report.deleted.contains(f.path))
+          f,
+    ];
+    final names = [for (final f in leftovers) trashedOriginalName(f.name)];
+    final ours = await app.store.takeTrashed([for (final n in names) n ?? '']);
+    var alreadyCounted = 0;
+    for (var i = 0; i < leftovers.length; i++) {
+      if (names[i] != null && ours[i]) alreadyCounted += leftovers[i].size;
+    }
+    return report.bytes - alreadyCounted;
+  }
+
+  /// Brings the photo library back in step after files were deleted from
+  /// under it. Runs in the background: nothing on screen waits for it.
+  Future<void> _syncGallery() async {
+    try {
+      // From Android 11 the system drops a file's media-index row when the
+      // file is deleted. Older versions leave it behind, so sweep there
+      // (slow: it checks every media file on the device).
+      if (await _sdk() < 30) {
+        await PhotoManager.editor.android.removeAllNoExistsAsset();
+      }
+    } catch (e) {
+      debugPrint('Media index cleanup failed: $e');
+    }
+    await app.refreshAfterFileChanges();
   }
 
   void _set(CleanerState s) {
     state = s;
-    notifyListeners();
+    _notify();
+  }
+
+  /// A scan or delete can finish after the screen is closed.
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }

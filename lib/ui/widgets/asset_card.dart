@@ -194,7 +194,7 @@ class _BottomScrim extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0x00000000), Color(0x8C000000)],
+              colors: [Color(0x00000000), Color(0xA6000000)],
             ),
           ),
         ),
@@ -306,10 +306,12 @@ class _Chip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      // A dark fill, not a light one: the chip has to stay readable over
+      // snow, sky and white walls as well as dark photos.
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
+        color: Colors.black.withValues(alpha: 0.42),
         borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

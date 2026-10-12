@@ -45,7 +45,12 @@ class _GalleryShiftAppState extends State<GalleryShiftApp> {
         darkTheme: AppTheme.build(Brightness.dark),
         builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
           value: AppTheme.overlayFor(Theme.of(context).brightness),
-          child: child!,
+          // Honour the system font size up to a point: beyond this the
+          // fixed-size cards and controls stop fitting.
+          child: MediaQuery.withClampedTextScaling(
+            maxScaleFactor: 1.3,
+            child: child!,
+          ),
         ),
         home: const _Root(),
       ),

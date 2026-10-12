@@ -613,7 +613,7 @@ class VideoControlsBar extends StatelessWidget {
       height: kVideoControlsHeight,
       padding: const EdgeInsets.fromLTRB(4, 4, 8, 4),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.5),
+        color: Colors.black.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
       ),

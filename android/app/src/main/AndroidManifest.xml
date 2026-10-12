@@ -15,9 +15,20 @@
     <uses-permission
         android:name="android.permission.READ_MEDIA_AUDIO"
         tools:node="remove" />
+    <!-- largeHeap: the video player buffers tens of MB per video in app
+         memory, and two can be loaded at once (the playing card and the next).
+         The default allowance is as low as 48 MB on some devices, which is
+         a crash; this raises it. -->
+    <!-- No backup or device transfer: saved decisions refer to photos on this
+         phone and would point at the wrong ones anywhere else. -->
     <application
         android:label="GalleryShift"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        tools:targetApi="31"
         android:requestLegacyExternalStorage="true"
+        android:largeHeap="true"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

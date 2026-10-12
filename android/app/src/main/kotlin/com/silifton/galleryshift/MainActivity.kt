@@ -1,4 +1,4 @@
-package com.silifton.gallery_shift
+package com.silifton.galleryshift
 
 import io.flutter.embedding.android.FlutterActivity
 

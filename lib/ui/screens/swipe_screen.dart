@@ -197,7 +197,9 @@ class _SwipeScreenState extends State<SwipeScreen> {
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(18, 22, 18, 12),
+                // Bottom room for the two cards peeking out below the top one
+                // (up to 36px), so they never cover the hint or buttons.
+                padding: const EdgeInsets.fromLTRB(18, 22, 18, 46),
                 child: AnimatedSwitcher(
                   duration: Motion.slow,
                   switchInCurve: Motion.emphasized,

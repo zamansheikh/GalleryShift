@@ -390,3 +390,54 @@ class SecondaryButton extends StatelessWidget {
     );
   }
 }
+
+/// The app's bottom sheet: rounded, with a grab handle, and scrollable when
+/// its content is taller than the screen allows (small phones, large text).
+Future<T?> showAppSheet<T>(
+  BuildContext context, {
+  required WidgetBuilder builder,
+  EdgeInsetsGeometry padding = const EdgeInsets.fromLTRB(20, 0, 20, 20),
+}) {
+  final p = Palette.of(context);
+  return showModalBottomSheet<T>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    // Size to the content instead of the default half-screen cap.
+    isScrollControlled: true,
+    builder: (sheet) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheet).height * 0.86,
+          ),
+          // Material, not a decorated Container, so list items inside can
+          // draw their tap feedback.
+          child: Material(
+            color: p.surface,
+            borderRadius: BorderRadius.circular(28),
+            clipBehavior: Clip.antiAlias,
+            child: SingleChildScrollView(
+              padding: padding,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(top: 12, bottom: 18),
+                    decoration: BoxDecoration(
+                      color: p.stroke,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  builder(sheet),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}

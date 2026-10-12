@@ -25,17 +25,17 @@
 | Welcome | Home | Swipe to keep |
 | :---: | :---: | :---: |
 | <img src="docs/screenshots/onboarding.jpg" width="240" /> | <img src="docs/screenshots/home.jpg" width="240" /> | <img src="docs/screenshots/swipe-keep.jpg" width="240" /> |
-| **Swipe to delete** | **Videos play on the card** | **Photo card** |
-| <img src="docs/screenshots/swipe-delete.jpg" width="240" /> | <img src="docs/screenshots/video-card.jpg" width="240" /> | <img src="docs/screenshots/photo-card.jpg" width="240" /> |
-| **Review bin** | **Space freed** | **Light mode** |
-| <img src="docs/screenshots/review-bin.jpg" width="240" /> | <img src="docs/screenshots/space-freed.jpg" width="240" /> | <img src="docs/screenshots/home-light.jpg" width="240" /> |
+| **Swipe to delete** | **Videos play on the card** | **Review bin** |
+| <img src="docs/screenshots/swipe-delete.jpg" width="240" /> | <img src="docs/screenshots/video-card.jpg" width="240" /> | <img src="docs/screenshots/review-bin.jpg" width="240" /> |
+| **Space freed** | **Storage cleanup** | **Light mode** |
+| <img src="docs/screenshots/space-freed.jpg" width="240" /> | <img src="docs/screenshots/storage-cleanup.jpg" width="240" /> | <img src="docs/screenshots/home-light.jpg" width="240" /> |
 
 ## Features
 
 - **Tinder-style decks.** Cards follow your finger and tilt with the drag. A KEEP or DELETE stamp appears, and the phone vibrates when you cross the decision point. A quick flick counts too, and Undo brings the last card back.
 - **Decks that make sense.** All photos (newest first), Shuffle, On this day, Screenshots, Videos, and one deck per month with its own progress.
 - **Videos play on the card.** They autoplay muted, and the next video preloads. Controls: a seek bar, double-tap either side to jump ±10 s, and long-press for 4× speed. A full-screen player continues from the same spot.
-- **A safety net.** Swiping left only moves an item to the review bin. In the bin, tap anything to rescue it, then delete the rest in one go. Deleted items go to *Recently Deleted* on iOS, or the system trash on Android 11+, for 30 days.
+- **A safety net.** Swiping left only moves an item to the review bin. In the bin, tap anything to rescue it, then delete the rest in one go. Deleted items go to *Recently Deleted* on iOS, or the system trash on Android 11+, for 30 days. Android 10 and older have no trash, so the app says so and asks before deleting for good.
 - **Storage cleanup (Android).** Scans shared storage for:
   - **Junk:** leftovers from Android's trash (hidden `.trashed-…` files that still use space), APK installers, temp and log files, half-finished downloads, and thumbnail caches.
   - **Empty folders.**
@@ -96,9 +96,32 @@ lib/
 └── theme/app_theme.dart         colours, type scale, motion
 ```
 
-- **Deletion is batched.** Decisions are stored locally. Nothing touches the library until you tap **Delete** in the bin. Then Android 11+ uses `MediaStore` trash, and iOS uses `PHAssetChangeRequest` deletion. Both show the system's own confirmation.
+- **Deletion is batched.** Decisions are stored locally. Nothing touches the library until you tap **Delete** in the bin. Then Android 11+ uses `MediaStore` trash, and iOS uses `PHAssetChangeRequest` deletion. Both show the system's own confirmation. Android 10 and older delete directly, behind the app's own confirmation.
+- **A decision can't land on the wrong photo.** Each saved decision carries the photo's capture time as a fingerprint. Platform IDs can be reassigned (a new phone, a rebuilt media database); a decision whose fingerprint no longer matches is dropped. Android backup and device transfer are switched off for the same reason.
+- **"Freed" is counted once.** On Android 11+ a deleted photo sits in the system trash until it expires. Its size is counted when you delete it; if storage cleanup later empties that trash, the same files are not counted again.
 - **The library is sorted in Dart by capture date.** On Android, the platform order follows when files were added to the device, which scrambles copied or restored galleries.
 - **Cards keep their state as they move up the stack.** Every card has the same widget structure at every depth, so a preloaded video isn't thrown away when its card reaches the front. A test covers this.
+
+## Releasing (Android)
+
+The app ID is `com.silifton.galleryshift` on both platforms.
+
+Release builds are signed with the keystore named in `android/key.properties` (git-ignored). Without that file the build falls back to the debug key, which installs on your own devices but can't be uploaded to Google Play.
+
+```properties
+# android/key.properties
+storeFile=/absolute/path/to/galleryshift-release.jks
+storePassword=…
+keyAlias=galleryshift
+keyPassword=…
+```
+
+```bash
+flutter build appbundle --release   # .aab for Google Play
+flutter build apk --release         # .apk to install directly
+```
+
+Bump `version:` in `pubspec.yaml` for every upload; Play rejects a build number it has seen.
 
 ## Development
 
@@ -107,16 +130,20 @@ flutter analyze
 flutter test
 ```
 
-The app icon and the showcase banner are drawn in Dart, so no design tools are needed:
+The app icon, the README banner and the Play Store graphics are drawn in Dart, so no design tools are needed (the finishing script uses `ffmpeg`):
 
 ```bash
 flutter test tool/generate_icon_test.dart && dart run flutter_launcher_icons  # app icons
-flutter test tool/showcase_test.dart                                          # docs/showcase.png
+flutter test tool/showcase_test.dart tool/store_graphics_test.dart            # banner, feature graphic, store screenshots
+tool/finish_store_graphics.sh                                                 # flatten to the formats Play and the README need
 ```
 
-`tool/showcase_test.dart` writes a PNG. The README uses a JPEG copy; convert it with `sips -s format jpeg docs/showcase.png --out docs/showcase.jpg`.
+Screenshots were taken on an Android emulator filled with sample images from [Lorem Picsum](https://picsum.photos); the two videos were generated from them.
 
-Screenshots were taken on an Android emulator filled with sample images from [Lorem Picsum](https://picsum.photos) and sample videos from [samplelib](https://samplelib.com).
+## Website and Play Store kit
+
+- `docs/` is the website, served by GitHub Pages: a landing page, the [privacy policy](https://zamansheikh.github.io/GalleryShift/privacy/) and a [support page](https://zamansheikh.github.io/GalleryShift/support/). Plain HTML and CSS, no build step.
+- `store/play/` holds everything for the Google Play listing: the text, the graphics, the answers for Play Console's forms, and a step-by-step guide in [`store/play/README.md`](store/play/README.md).
 
 ## Developer
 

@@ -20,8 +20,7 @@ extension StorageCategoryUi on StorageCategory {
   };
 
   String get blurb => switch (this) {
-    StorageCategory.junk =>
-      'Trash leftovers, old installers, temp files and thumbnail caches.',
+    StorageCategory.junk => 'Trash leftovers, installers, temp files, caches.',
     StorageCategory.emptyFolders => 'Folders with nothing inside.',
     StorageCategory.largeFiles => 'Files over 50 MB, biggest first.',
     StorageCategory.documents => 'PDFs, Office files, text and ebooks.',
@@ -81,12 +80,15 @@ class _StorageScreenState extends State<StorageScreen> {
     final bytes = _cleaner.bytesIn(StorageCategory.junk);
     final ok = await confirmPermanentDelete(
       context,
-      title: 'Clean junk?',
+      title: junk.isEmpty ? 'Remove empty folders?' : 'Clean junk?',
       what: [
         if (junk.isNotEmpty)
           '${plural(junk.length, 'junk file')} (${formatBytes(bytes)})',
         if (folders.isNotEmpty) plural(folders.length, 'empty folder'),
       ].join(' and '),
+      // Say what "junk" covers here, so nobody loses an installer they
+      // meant to keep.
+      detail: junk.isEmpty ? null : 'Junk: ${_junkBreakdown(junk)}.',
     );
     if (!ok || !mounted) return;
     HapticFeedback.mediumImpact();
@@ -143,6 +145,7 @@ class _StorageScreenState extends State<StorageScreen> {
                   child: switch (_cleaner.state) {
                     CleanerState.checking => const SizedBox.shrink(),
                     CleanerState.needsAccess => _AccessNeeded(
+                      viaSettings: _cleaner.usesAllFilesAccess,
                       onAllow: _cleaner.requestAccess,
                     ),
                     CleanerState.scanning => const _Scanning(),
@@ -168,7 +171,11 @@ class _StorageScreenState extends State<StorageScreen> {
 // ------------------------------------------------------------------ states
 
 class _AccessNeeded extends StatelessWidget {
-  const _AccessNeeded({required this.onAllow});
+  const _AccessNeeded({required this.viaSettings, required this.onAllow});
+
+  /// Android 11+: the user flips a switch in system Settings. Older
+  /// versions show an ordinary permission prompt.
+  final bool viaSettings;
   final VoidCallback onAllow;
 
   @override
@@ -200,7 +207,7 @@ class _AccessNeeded extends StatelessWidget {
           ),
           const SizedBox(height: 26),
           Text(
-            'Allow all files access',
+            viaSettings ? 'Allow all files access' : 'Allow storage access',
             style: AppText.title(color: p.text),
             textAlign: TextAlign.center,
           ),
@@ -234,16 +241,18 @@ class _AccessNeeded extends StatelessWidget {
             ),
           const SizedBox(height: 18),
           PrimaryButton(
-            label: 'Open settings',
-            icon: Icons.settings_rounded,
+            label: viaSettings ? 'Open settings' : 'Allow access',
+            icon: viaSettings ? Icons.settings_rounded : Icons.check_rounded,
             onTap: onAllow,
           ),
-          const SizedBox(height: 12),
-          Text(
-            'Turn on “Allow access to manage all files”, then come back.',
-            style: AppText.caption(color: p.textFaint),
-            textAlign: TextAlign.center,
-          ),
+          if (viaSettings) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Turn on “Allow access to manage all files”, then come back.',
+              style: AppText.caption(color: p.textFaint),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ],
       ),
     );
@@ -408,20 +417,36 @@ class _Summary extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                clean ? 'ALL CLEAN' : 'READY TO FREE',
+                clean
+                    ? 'ALL CLEAN'
+                    : junkCount > 0
+                    ? 'READY TO FREE'
+                    : 'READY TO TIDY',
                 style: AppText.overline(color: p.textFaint),
               ),
               const SizedBox(height: 6),
-              Text(
-                clean ? 'Nothing to clean' : formatBytes(junkBytes),
-                style: AppText.display(color: p.text),
+              // Empty folders take no space: lead with their count rather
+              // than a "0 MB" headline.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  clean
+                      ? 'Nothing to clean'
+                      : junkCount > 0
+                      ? formatBytes(junkBytes)
+                      : plural(folders, 'empty folder'),
+                  style: AppText.display(color: p.text),
+                ),
               ),
               const SizedBox(height: 4),
               Text(
                 clean
                     ? 'No junk files or empty folders found.'
+                    : junkCount == 0
+                    ? 'No junk files found.'
                     : [
-                        if (junkCount > 0) plural(junkCount, 'junk file'),
+                        plural(junkCount, 'junk file'),
                         if (folders > 0) plural(folders, 'empty folder'),
                       ].join(' · '),
                 style: AppText.label(color: p.textDim),
@@ -429,8 +454,9 @@ class _Summary extends StatelessWidget {
               if (!clean) ...[
                 const SizedBox(height: 18),
                 PrimaryButton(
-                  label: 'Clean junk',
+                  label: junkCount > 0 ? 'Clean junk' : 'Remove empty folders',
                   icon: Icons.auto_awesome_rounded,
+                  busy: cleaner.deleting,
                   onTap: onCleanJunk,
                 ),
               ],
@@ -525,6 +551,7 @@ class _CategoryRow extends StatelessWidget {
                     category.blurb,
                     style: AppText.caption(color: p.textDim),
                     maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -562,6 +589,7 @@ Future<bool> confirmPermanentDelete(
   BuildContext context, {
   required String title,
   required String what,
+  String? detail,
 }) async {
   final p = Palette.of(context);
   final ok = await showDialog<bool>(
@@ -571,7 +599,8 @@ Future<bool> confirmPermanentDelete(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: Text(title, style: AppText.title(color: p.text)),
       content: Text(
-        '$what will be deleted permanently. They skip the trash and can’t be recovered.',
+        '$what will be deleted permanently. They skip the trash and can’t be recovered.'
+        '${detail == null ? '' : '\n\n$detail'}',
         style: AppText.body(color: p.textDim),
       ),
       actions: [
@@ -606,4 +635,19 @@ String _took(Duration? d) {
   if (d == null) return '';
   if (d.inMilliseconds < 1000) return ' in under a second';
   return ' in ${(d.inMilliseconds / 1000).toStringAsFixed(1)} s';
+}
+
+/// "1 trash leftover, 2 app installers, 6 cached thumbnails".
+String _junkBreakdown(List<FoundFile> junk) {
+  String noun(JunkKind kind) => switch (kind) {
+    JunkKind.trashLeftover => 'trash leftover',
+    JunkKind.installer => 'app installer',
+    JunkKind.tempAndLogs => 'temp or log file',
+    JunkKind.thumbnailCache => 'cached thumbnail',
+  };
+  return [
+    for (final kind in JunkKind.values)
+      if (junk.any((f) => f.junk == kind))
+        plural(junk.where((f) => f.junk == kind).length, noun(kind)),
+  ].join(', ');
 }
